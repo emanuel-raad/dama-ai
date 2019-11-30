@@ -2,189 +2,163 @@ import numpy as np
 from dama.agents.player import Player
 from dama.game.constants import Pieces
 from dama.game.constants import Color
+from dama.game.gameboard import Gameboard
+
 from dama.game import direction
 from treelib import Node, Tree
 
 class State(object):
+    '''
+    Class to store the representation of the game at each
+    node of the tree.
+
+    Contains the gameboard, the position of the piece that just moved
+
+    Tag is a string representation of the position
+    '''
     def __init__(self, gameboard, position):
         self.gameboard = gameboard
         self.position = position
         self.tag = np.array2string(position)
 
 class DamaGame:
-    def __init__(self):
+    def __init__(self, board=None):
         self.n_turns = 0
-        self.initialize_gameboard()
-
-    def initialize_gameboard(self):
-        self.rows = 8
-        self.cols = 8
-        self.gameboard = np.zeros((self.rows, self.cols), dtype='uint8')
-        self.gameboard[1:3] = Pieces.WHITE
-        self.gameboard[5:7] = Pieces.BLACK
-
-    def promote_piece(self, position):
-        pass
-
-    def remove_piece(self, gameboard, position):
-        gameboard[position[0], position[1]] = Pieces.EMPTY
-
-    def move_piece(self, gameboard, startPosition, endPosition):
-        piece = self.at(gameboard, startPosition)
-        self.remove_piece(gameboard, startPosition)
-        gameboard[endPosition[0], endPosition[1]] = piece
+        self.gameboard = Gameboard(gameboard = board)
 
     def get_all_legal_moves(self, gameboard, player):
         
         legal_moves = []
 
-        for x in range(0, self.rows):
-            for y in range(0, self.cols):
-                if self.player_owns_piece(gameboard, player, [x, y]):
+        for x in range(0, self.gameboard.rows):
+            for y in range(0, self.gameboard.cols):
+                if self.gameboard.player_owns_piece(player, [x, y]):
                     pass
                 else:
                     pass
 
         return legal_moves
 
-    def is_promoted(self, gameboard, position):
-        if ((gameboard[position[0], position[1]] == Pieces.WHITE_PROMOTED) or 
-            (gameboard[position[0], position[1]] == Pieces.BLACK_PROMOTED)):
-            return True
-        else:
-            return False
-
-    def is_outside_board(self, position):
-        for pos in position:
-            if pos < 0 or pos > 7:
-                return True
-        return False
-
-    def at(self, gameboard, position):
-
-        if not self.is_outside_board(position):
-            return gameboard[position[0], position[1]]
-        else:
-            raise IndexError("Position outside of board")
-
-    def player_owns_piece(self, gameboard, player, position): 
-        piece = self.at(gameboard, position)
-        
-        if player.color == Color.WHITE:
-            if piece == Pieces.WHITE or piece == Pieces.WHITE_PROMOTED:
-                return True
-        elif player.color == Color.BLACK:
-            if piece == Pieces.BLACK or piece == Pieces.BLACK_PROMOTED:
-                return True
-        
-        return False
-
     def get_piece_legal_move(
-        self, player, position, 
-        startPosition=None, piece_legal_moves = None, pieces_to_remove = None, gameboard = None,
-        movetree = None, lastNode = None, canMove = True
+        self, player, position, startPosition = None,
+        pieces_to_remove = None, current_gameboard = None,
+        movetree = None, lastNode = None, canMove = True, hasJumped = False
     ):
 
-        if piece_legal_moves is None:
-            piece_legal_moves = []
+        '''
+        position is the current position of the piece whose moves we are inspecting
+
+        startPosition is the original position of that move, before any jumps have been made
+        '''
+
+        # Initialize empty lists
         if pieces_to_remove is None:
             pieces_to_remove = []
-        if gameboard is None:
-            gameboard = self.gameboard
-        
-        state = State(gameboard, position)
-        node = Node(tag=state.tag, data=state)
-        
+        if current_gameboard is None:
+            current_gameboard = self.gameboard
 
+        # Add the node to the movetree, or create one if it doesn't exist
         if movetree is None:
             movetree = Tree()
-        if self.player_owns_piece(gameboard, player, position):
-            if lastNode is None:
-                movetree.add_node(node)
-                # print("Node: {}".format(node.data.tag))
-                # print("ROOT NODE")
-                # print(node.data.gameboard)
-                # print()
-            else:
-                movetree.add_node(node, parent=lastNode)    
-                # print("Node: {}".format(node.data.tag))
-                # print("Parent: {}".format(movetree.parent(node.identifier).data.tag))
-                # print(node.data.gameboard)
-                # print()
 
-        if self.player_owns_piece(gameboard, player, position):
+        if current_gameboard.player_owns_piece(player, position):
+
+            # Create a node for the tree from the current state of the game
+            state = State(current_gameboard, position)
+            node = Node(tag=state.tag, data=state)
+
+            # if current_gameboard.player_owns_piece(player, position):
+            if lastNode is None:
+                # Set current node as the root
+                movetree.add_node(node)
+                lastNode = node
+            else:
+                # Create a new node as the child of the last node
+                movetree.add_node(node, parent=lastNode)
 
             valid_directions = direction.get_valid_directions(
-                startPosition, position, player.color, self.is_promoted(gameboard, position)
+                startPosition, position, player.color, current_gameboard.is_promoted(position)
             )
-            
-            for i in valid_directions:
+
+            if current_gameboard.is_promoted(position):
+                lookup_range = max(current_gameboard.rows, current_gameboard.cols)
+            else:
+                lookup_range = 3
+
+            for dir in valid_directions:
                 
-                if self.is_promoted(gameboard, position):
-                    # Promoted piece moves
-                    pass
-                else:
-                    # Normal piece moves
+                jumpIsAvailable = False
+                jumpablePiece = None
 
-                    adjacent_piece = position + i
-                    next_adjacent_piece = position + 2 * i
+                for multiplier in range(1, lookup_range):
+
+                    if not current_gameboard.is_promoted(position):
+                        if multiplier == 2 or hasJumped:
+                            canMove = False
+                        elif multiplier == 1 and not hasJumped:
+                            canMove = True
                     
-                    if self.is_outside_board(adjacent_piece):
-                        continue
+                    next = position + multiplier * dir
+                    next_next = position + (multiplier + 1) * dir
 
-                    if self.player_owns_piece(gameboard, player, adjacent_piece) and startPosition is None:
-                        # You own the piece, can't move there
-                        continue
+                    # Check for any collision or invalid moves
 
-                    elif self.at(gameboard, adjacent_piece) == Pieces.EMPTY and startPosition is None:
-                        # There is an empty piece you can move to
-                        piece_legal_moves.append(adjacent_piece)
-                        pieces_to_remove.append([])
+                    # Out of board
+                    # Quit
+                    if current_gameboard.is_outside_board(next):
+                        break
 
-                        tempgameboard = np.copy(gameboard)
-
-                        self.move_piece(tempgameboard, position, adjacent_piece)
-                        self.get_piece_legal_move(
-                            player, adjacent_piece,
-                            startPosition=position, piece_legal_moves = piece_legal_moves,
-                            pieces_to_remove = pieces_to_remove, gameboard=tempgameboard,
-                            lastNode=node, movetree=movetree, canMove = False
-                        )
-
+                    # You own the next piece
+                    # Quit
+                    elif current_gameboard.player_owns_piece(player, next):
+                        break
+                    
+                    # Collion with two back to back pieces
+                    # Quit
                     elif (
-                        not self.player_owns_piece(gameboard, player, adjacent_piece) 
-                        and self.at(gameboard, adjacent_piece) != Pieces.EMPTY
-                        and not self.is_outside_board(next_adjacent_piece)
-                        ):
+                        not current_gameboard.at(next) == Pieces.EMPTY
+                        and not current_gameboard.is_outside_board(next_next)
+                        and not current_gameboard.at(next_next) == Pieces.EMPTY
+                        and not current_gameboard.player_owns_piece(player, next)
+                        and not current_gameboard.player_owns_piece(player, next_next)
+                    ):
+                        break
+                    
+                    if current_gameboard.at(next) == Pieces.EMPTY:
+                        if jumpIsAvailable:
+                            if current_gameboard.opponents_between_two_positions(player, position, next) < 2:
+                                temp_gameboard = Gameboard(gameboard=np.copy(current_gameboard.gameboard))
+                                temp_gameboard.move_piece(position, next)
+                                temp_gameboard.remove_piece(jumpablePiece)
 
-                        if self.at(gameboard, next_adjacent_piece) == Pieces.EMPTY:
-                            # Jump possible
-                            # Need to branch from here
-                            # repeat search for new position = next_adjacent_piece
-                            piece_legal_moves.append(next_adjacent_piece)
-                            pieces_to_remove.append(adjacent_piece)
-                            
-                            # need a way to know when a branch has ended
-                            # to go back to the last node
+                                self.get_piece_legal_move(
+                                    player, next, startPosition = position,
+                                    pieces_to_remove = None, current_gameboard = temp_gameboard,
+                                    movetree = movetree, lastNode = node, canMove = False, hasJumped = True
+                                )
 
-                            tempgameboard = np.copy(gameboard)
+                        elif canMove:
+                            # gameboard gameboard gameboard
+                            temp_gameboard = Gameboard(gameboard=np.copy(current_gameboard.gameboard))
+                            temp_gameboard.move_piece(position, next)
 
-                            self.remove_piece(tempgameboard, adjacent_piece)
-                            self.move_piece(tempgameboard, position, next_adjacent_piece)
+                            new_state = State(temp_gameboard, next)
+                            new_node = Node(tag=new_state.tag, data=new_state)
 
-                            self.get_piece_legal_move(
-                                player, next_adjacent_piece,
-                                startPosition=position, piece_legal_moves = piece_legal_moves,
-                                pieces_to_remove = pieces_to_remove, gameboard=tempgameboard,
-                                lastNode=node, movetree=movetree, canMove = False
-                            )
-            
+                            movetree.add_node(new_node, parent=node)
+                    elif (
+                        not current_gameboard.at(next) == Pieces.EMPTY
+                        and not current_gameboard.player_owns_piece(player, next)
+                    ):
+                        if not jumpIsAvailable:
+                            jumpIsAvailable = True
+                            jumpablePiece = next
+
         return {
-            'legal_moves' : piece_legal_moves,
+            'legal_moves' : [],
             'remove' : pieces_to_remove,
             'tree' : movetree
         }
-
 
     # def check_win_state(self, Player):
     def check_win_state(self):

@@ -1,49 +1,31 @@
 from dama.game import dama
 from dama.agents import player
 from dama.game.constants import Color
+from dama.tests.gameboards import simple_promoted
+from dama.tests.gameboards import simple
+from dama.tests.gameboards import empty
+from dama.tests.gameboards import triple_jump
+from dama.tests.gameboards import triple_jump_promoted
+from dama.tests.gameboards import branching_black
+from dama.tests.gameboards import zigzag
 import numpy as np
 
 if __name__ == '__main__':
 
-    def reset():
-        return np.array([
-            [1, 3, 3, 0, 0, 0, 0, 0],
-            [3, 3, 0, 1, 0, 0, 0, 0],
-            [0, 3, 0, 0, 1, 0, 0, 1],
-            [0, 1, 0, 1, 0, 1, 0, 1],
-            [1, 0, 0, 0, 1, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [1, 0, 0, 0, 0, 0, 0, 0],
-            [3, 0, 0, 0, 0, 0, 0, 0]
-        ])
-
     print("Hello World!")
 
-    damagame = dama.DamaGame()
+    damagame = dama.DamaGame(board=zigzag)
 
     white = player.Player(Color.WHITE)
     black = player.Player(Color.BLACK)
 
-    damagame.gameboard = np.array([
-        [1, 3, 3, 0, 0, 0, 0, 0],
-        [3, 3, 0, 1, 0, 0, 0, 0],
-        [0, 3, 0, 0, 1, 0, 0, 1],
-        [0, 1, 0, 1, 0, 1, 0, 1],
-        [1, 0, 0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 0],
-        [1, 0, 0, 0, 0, 0, 0, 0],
-        [3, 0, 0, 0, 0, 0, 0, 0]
-    ])
-
     print("STARTING BOARD")
-    print(damagame.gameboard)
+    print(damagame.gameboard.gameboard)
     print()
 
     tests = [
-        # [white, [[1, 1], [2, 1], [3, 0]]],
-        # [black, [[5, 0], [6, 6], [7, 7]]],
         [black, np.array([[7, 0]])],
-        [white, np.array([[0, 0]])]
+        # [black, np.array([[5, 3]])]
     ]
 
     for i in tests:
@@ -52,7 +34,7 @@ if __name__ == '__main__':
             res = damagame.get_piece_legal_move(player, position)
             # print("Piece: {} Moves: {}".format(position, res['legal_moves']))
             res['tree'].show(data_property='position')
-            damagame.gameboard = reset()
+            damagame.gameboard = zigzag
             # res['tree'].save2file('tree.txt', data_property='gameboard')
 
         print()

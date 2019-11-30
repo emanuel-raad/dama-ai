@@ -33,7 +33,6 @@ def get_valid_directions(startPosition, endPosition, color, promoted):
         
         return valid_directions
 
-
 if __name__ == '__main__':
     startPosition = np.array([1, 2])
     endPosition = np.array([1, 4])

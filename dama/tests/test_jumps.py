@@ -6,16 +6,18 @@ import numpy as np
 import pickle
 import os
 import json
+import time
 
 class base_model():
     def __init__(self, player, board):
         self.player = player
         self.board = board
-        self.damagame = dama.DamaGame()
-        self.damagame.gameboard = board
+        self.damagame = dama.DamaGame(board=board)
+
     def calc(self, position):
         self.res = self.damagame.get_piece_legal_move(self.player, position)
         self.tree2set()
+    
     def tree2set(self):
         tag_paths = []
 
@@ -40,7 +42,12 @@ def test(j, compare=True):
             test = base_model(p, rule['board'])
 
             for s in rule['start']:
+
+                start_time = time.time()
                 test.calc(s)
+                end_time = time.time()
+                runtime = end_time - start_time
+
                 filename = '{}_{}_{}x{}.pkl'.format(json['player'], rule['label'], s[0], s[1])
                 filename = os.path.join('dama', 'tests', 'test_jumps_normal', filename)
 
@@ -52,10 +59,13 @@ def test(j, compare=True):
                         actual = pickle.load(handle)
                         
                         # yield check_set_equality, actual, test.set
-                        print("{}: {}".format(check_set_equality(actual, test.set), filename))
+                        eq = check_set_equality(actual, test.set)
+                        print("[{:4.0f}ms] {}: {}".format(runtime * 1000, eq, filename))
 
-# def check_set_equality(set1, set2):
-#     assert set1.difference(set2) == set()
+                        if not eq:
+                            print("Actual: {}".format(actual))
+                            print("Test: {}".format(test.set))
+                            print()
 
 def check_set_equality(set1, set2):
     return set1.difference(set2) == set()

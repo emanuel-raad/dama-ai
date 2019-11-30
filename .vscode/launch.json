@@ -5,11 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python: Module",
+            "name": "Dama on PC",
             "type": "python",
             "request": "launch",
             "module": "dama",
-            "cwd":"C:\\Users\\Emanuel\\Documents\\GitHub\\dama-ai"
+            "cwd": "H:\\Coding\\dama-ai"
+        },
+        {
+            "name": "Dama on Laptop",
+            "type": "python",
+            "request": "launch",
+            "module": "dama",
+            "cwd": "Z:\\dama-ai"
         }
     ]
 }
