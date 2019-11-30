@@ -1,9 +1,11 @@
 from dama.game import dama
 from dama.agents import player
 from dama.game.constants import Color
-from dama.tests import gameboards
+from dama.tests.test_jumps_normal import rules
 import numpy as np
-import pprint
+import pickle
+import os
+import json
 
 class base_model():
     def __init__(self, player, board):
@@ -13,38 +15,50 @@ class base_model():
         self.damagame.gameboard = board
     def calc(self, position):
         self.res = self.damagame.get_piece_legal_move(self.player, position)
-        # self.res['tree'].show(data_property='position')
-    def __eq__(self, other):
-        return self.res['tree'].show(data_property='position') == other.res['tree'].show(data_property='position')
+        self.tree2set()
+    def tree2set(self):
+        tag_paths = []
+
+        for i in self.res['tree'].paths_to_leaves():
+            path = []
+            for j in i:
+                path.append(self.res['tree'].get_node(j).data.tag)
+            tag_paths.append(path)
+        
+        self.set = set(map(tuple, tag_paths))
+
+def test(j, compare=True):
+
+    for json in j:
+        if json['player'] == 'white':
+            p = player.Player(Color.WHITE)
+        elif json['player'] == 'black':
+            p = player.Player(Color.BLACK)
+
+        for rule in json['tests']:
+
+            test = base_model(p, rule['board'])
+
+            for s in rule['start']:
+                test.calc(s)
+                filename = '{}_{}_{}x{}.pkl'.format(json['player'], rule['label'], s[0], s[1])
+                filename = os.path.join('dama', 'tests', 'test_jumps_normal', filename)
+
+                if not compare:
+                    with open(filename, 'wb') as handle:
+                        pickle.dump(test.set, handle)
+                elif compare:
+                    with open(filename, 'rb') as handle:
+                        actual = pickle.load(handle)
+                        
+                        # yield check_set_equality, actual, test.set
+                        print("{}: {}".format(check_set_equality(actual, test.set), filename))
+
+# def check_set_equality(set1, set2):
+#     assert set1.difference(set2) == set()
+
+def check_set_equality(set1, set2):
+    return set1.difference(set2) == set()
 
 if __name__ == '__main__':
-    
-    print("Testing jumps...!")
-
-    white = player.Player(Color.WHITE)
-    black = player.Player(Color.BLACK)
-
-    test1 = base_model(white, gameboards.branching_white)
-    test1.calc(np.array([3, 3]))
-    print(test1.res['tree'].paths_to_leaves())
-    # test1.res['tree'].save2file('filename.txt', data_property='position')
-
-    test2 = base_model(black, gameboards.branching_black)
-    test2.calc(np.array([4, 3]))
-    # print(test2.res['tree'].paths_to_leaves())
-
-    tag_paths = []
-
-    for i in test2.res['tree'].paths_to_leaves():
-        path = []
-        for j in i:
-            path.append(test2.res['tree'].get_node(j).data.tag)
-            # print("{} ".format(test2.res['tree'].get_node(j).data.tag)),
-        tag_paths.append(path)
-        # print()
-    
-    for i in tag_paths:
-        print(i)
-
-    s = set(map(tuple, tag_paths))
-    s2 = set(map(tuple, tag_paths))
+    test(rules.rules, compare=True)
