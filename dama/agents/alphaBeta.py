@@ -3,7 +3,7 @@ from dama.agents import helper
 
 class AlphaBeta(Player):
 
-    def __init__(self, color, movesAhead = 2):
+    def __init__(self, color, movesAhead = 1):
         super().__init__(color)
 
         # Maybe make moves ahead more dynamic

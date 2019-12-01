@@ -17,8 +17,7 @@ class State(object):
 
     Tag is a string representation of the position
     '''
-    def __init__(self, gameboard, position, removed):
-        self.gameboard = gameboard
+    def __init__(self, position, removed):
         self.position = position
         self.removed = removed
         self.tag = np.array2string(position)
@@ -207,7 +206,7 @@ class DamaGame:
         if current_gameboard.player_owns_piece(player, position):
 
             # Create a node for the tree from the current state of the game
-            state = State(current_gameboard, position, lastRemoved)
+            state = State(position, lastRemoved)
             node = Node(tag=state.tag, data=state)
 
             # if current_gameboard.player_owns_piece(player, position):
@@ -285,7 +284,7 @@ class DamaGame:
                             temp_gameboard = Gameboard(gameboard=np.copy(current_gameboard.gameboard))
                             temp_gameboard.move_piece(position, next)
 
-                            new_state = State(temp_gameboard, next, None)
+                            new_state = State(next, None)
                             new_node = Node(tag=new_state.tag, data=new_state)
 
                             movetree.add_node(new_node, parent=node)
