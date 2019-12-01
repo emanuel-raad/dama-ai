@@ -8,5 +8,14 @@ class Player(ABC):
         self.color = color
 
     @abstractmethod
-    def request_move(self, moveList, removeList):
+    def request_move(self, board, moveList, removeList):
         pass
+
+    def get_color(self, opposite=True):
+        if not opposite:
+            return self.color
+        else:
+            if self.color == Color.WHITE:
+                return Color.BLACK
+            else:
+                return Color.WHITE

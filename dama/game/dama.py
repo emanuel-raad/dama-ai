@@ -96,7 +96,7 @@ class DamaGame:
                 break
 
             # Ask the player for his choice
-            choice = current_player.request_move(res['move'], res['remove'])
+            choice = current_player.request_move(self.gameboard, res['move'], res['remove'])
             print("You picked {}".format(choice))
 
             # Perform the player's move
@@ -138,10 +138,12 @@ class DamaGame:
                     if gameboard.at(pos) == Pieces.WHITE:
                         gameboard.gameboard[i][j] = Pieces.WHITE_PROMOTED
 
-    def get_all_legal_moves(self, player, gameboard=None):
+    def get_all_legal_moves(self, player, temp_gameboard=None):
 
-        if gameboard is None:
+        if temp_gameboard is None:
             gameboard = self.gameboard
+        else:
+            gameboard = Gameboard(gameboard=np.copy(temp_gameboard.gameboard))
 
         all_move_list = []
         all_remove_list = []
@@ -151,7 +153,7 @@ class DamaGame:
             for y in range(0, gameboard.cols):
                 pos = np.array([x, y])
                 if gameboard.player_owns_piece(player, pos):
-                    all_possible_move_tree = self.get_piece_legal_move(player, pos)
+                    all_possible_move_tree = self.get_piece_legal_move(player, pos, current_gameboard=gameboard)
                     
                     if all_possible_move_tree.depth() > 0:
                         b =  listFromTree(all_possible_move_tree)
@@ -312,12 +314,13 @@ class DamaGame:
     def increment_turn(self):
         self.n_turns += 1
 
-    def performMove(self, moveList, removeList, temp_gameboard=False):
+    def performMove(self, moveList, removeList, temp_gameboard=None):
 
-        if temp_gameboard == False:
+        if temp_gameboard is None:
             gameboard = self.gameboard
         else:
-            gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+            # gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+            gameboard = temp_gameboard
 
         for i in range(len(moveList)):
             if i == 0:

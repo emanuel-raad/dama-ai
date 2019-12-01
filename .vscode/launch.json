@@ -12,6 +12,13 @@
             "cwd": "H:\\Coding\\dama-ai"
         },
         {
+            "name": "AlphaBeta on PC",
+            "type": "python",
+            "request": "launch",
+            "module": "dama.scripts.test_ab",
+            "cwd": "H:\\Coding\\dama-ai"
+        },
+        {
             "name": "Dama on Laptop",
             "type": "python",
             "request": "launch",

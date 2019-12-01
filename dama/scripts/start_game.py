@@ -1,6 +1,7 @@
 from dama.game import dama
 from dama.agents.human import Human
 from dama.agents.random import Random
+from dama.agents.alphaBeta import AlphaBeta
 from dama.game.constants import Color
 
 if __name__ == '__main__':
@@ -10,9 +11,16 @@ if __name__ == '__main__':
     game = dama.DamaGame()
 
     # player1 = Human(Color.BLACK)
-    player1 = Random(Color.BLACK)
     # player2 = Human(Color.WHITE)
+
+    player1 = Human(Color.BLACK)
     player2 = Random(Color.WHITE)
+
+    # player1 = Random(Color.BLACK)
+    # player2 = Random(Color.WHITE)
+
+    # player1 = Human(Color.BLACK)
+    # player2 = AlphaBeta(Color.WHITE)
 
     game.setAgent(player1)
     game.setAgent(player2)

@@ -2,7 +2,7 @@ from dama.agents.player import Player
 import numpy as np
 
 class Human(Player):
-    def request_move(self, moveList, removeList):
+    def request_move(self, board, moveList, removeList):
         maxChoice = len(moveList) - 1
         
         for i, move in enumerate(moveList):
