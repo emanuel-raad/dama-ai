@@ -1,9 +1,9 @@
 from dama.game import dama
 from dama.agents.placeholder import Placeholder
 from dama.game.constants import Color
-from dama.tests.gameboards import tripleJumpPromotedMiddle
-from dama.tests.gameboards import simple
-from dama.tests.gameboards import default
+from dama.tests.gameboards_constants import tripleJumpPromotedMiddle
+from dama.tests.gameboards_constants import simple
+from dama.tests.gameboards_constants import default
 import numpy as np
 import pprint
 

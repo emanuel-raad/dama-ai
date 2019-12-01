@@ -9,7 +9,8 @@ if __name__ == '__main__':
 
     game = dama.DamaGame()
 
-    player1 = Human(Color.BLACK)
+    # player1 = Human(Color.BLACK)
+    player1 = Random(Color.BLACK)
     # player2 = Human(Color.WHITE)
     player2 = Random(Color.WHITE)
 

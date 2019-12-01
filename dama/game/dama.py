@@ -1,12 +1,12 @@
 import numpy as np
+import os
+from treelib import Node, Tree
+
 from dama.agents.player import Player
 from dama.game.constants import Pieces
 from dama.game.constants import Color
 from dama.game.gameboard import Gameboard
-import os
-
 from dama.game import direction
-from treelib import Node, Tree
 
 class State(object):
     '''
@@ -77,6 +77,23 @@ class DamaGame:
             # Update
             # Get all posible moves
             res = self.get_all_legal_moves(current_player)
+            
+            # Check Win State
+            metrics = self.gameboard.metrics(current_player)
+            if (
+                # No moves left
+                len(res['move']) == 0 or
+                (
+                # Little dude vs King
+                metrics['myPieces'] == 1
+                and metrics['myPromoted'] == 0
+                and metrics['opponentPieces'] == 0
+                and metrics['opponentPromoted'] == 1
+                )
+            ):
+                running = False
+                winner = not agentFlipFlop
+                break
 
             # Ask the player for his choice
             choice = current_player.request_move(res['move'], res['remove'])
@@ -88,7 +105,7 @@ class DamaGame:
             # End turn
 
             # check win status
-            if self.n_turns == 100:
+            if self.n_turns == 1000:
                 running = False
             # check promote status
             self.check_for_promotions()
@@ -97,12 +114,18 @@ class DamaGame:
             agentFlipFlop = not agentFlipFlop
             # Clear the screen
             os.system('cls' if os.name == 'nt' else 'clear')
+        
+        # Declare the winner
+        if winner:
+            print("Winner is {}".format(self.white_player.color))
+        else:
+            print("Winner is {}".format(self.black_player.color))
 
-    def check_for_promotions(self, temp_gameboard=False):
-        if temp_gameboard == False:
+    def check_for_promotions(self, temp_gameboard=None):
+        if temp_gameboard is None:
             gameboard = self.gameboard
         else:
-            gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+            gameboard = temp_gameboard
 
         row_index = [0, gameboard.rows - 1]
         for i in row_index:
@@ -136,18 +159,25 @@ class DamaGame:
                         all_move_list.extend(b['move'])
                         all_remove_list.extend(b['remove'])
                         all_count_list.extend(b['count'])
+        
+        if len(all_count_list) > 0:    
+            max_indices = np.argwhere(all_count_list == np.amax(all_count_list)).flatten().tolist()
 
-        max_indices = np.argwhere(all_count_list == np.amax(all_count_list)).flatten().tolist()
+            valid_moves = [all_move_list[i] for i in max_indices]
+            valid_removes = [all_remove_list[i] for i in max_indices]
+            valid_counts = [all_count_list[i] for i in max_indices]
 
-        valid_moves = [all_move_list[i] for i in max_indices]
-        valid_removes = [all_remove_list[i] for i in max_indices]
-        valid_counts = [all_count_list[i] for i in max_indices]
-
-        return {
-            'move' : valid_moves,
-            'remove' : valid_removes,
-            'count' : valid_counts
-        }
+            return {
+                'move' : valid_moves,
+                'remove' : valid_removes,
+                'count' : valid_counts
+            }
+        else:
+            return {
+                'move' : [],
+                'remove' : [],
+                'count' : []
+            }
 
     def get_piece_legal_move(
         self, player, position, startPosition = None,
@@ -164,6 +194,9 @@ class DamaGame:
         # Initialize empty lists
         if current_gameboard is None:
             current_gameboard = self.gameboard
+
+        # Check for promotions
+        self.check_for_promotions(current_gameboard)
 
         # Add the node to the movetree, or create one if it doesn't exist
         if movetree is None:
