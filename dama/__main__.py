@@ -1,40 +1,77 @@
 from dama.game import dama
-from dama.agents import player
+from dama.agents.placeholder import Placeholder
 from dama.game.constants import Color
-from dama.tests.gameboards import simple_promoted
+from dama.tests.gameboards import tripleJumpPromotedMiddle
 from dama.tests.gameboards import simple
-from dama.tests.gameboards import empty
-from dama.tests.gameboards import triple_jump
-from dama.tests.gameboards import triple_jump_promoted
-from dama.tests.gameboards import branching_black
-from dama.tests.gameboards import zigzag
+from dama.tests.gameboards import default
 import numpy as np
+import pprint
 
 if __name__ == '__main__':
 
     print("Hello World!")
 
-    damagame = dama.DamaGame(board=zigzag)
+    damagame = dama.DamaGame(board=tripleJumpPromotedMiddle)
 
-    white = player.Player(Color.WHITE)
-    black = player.Player(Color.BLACK)
+    # white = player.Player(Color.WHITE)
+    # black = player.Player(Color.BLACK)
+
+    white = Placeholder(Color.WHITE)
+    black = Placeholder(Color.BLACK)
 
     print("STARTING BOARD")
     print(damagame.gameboard.gameboard)
     print()
 
     tests = [
-        [black, np.array([[7, 0]])],
-        # [black, np.array([[5, 3]])]
+        [white, np.array([[1, 0]])],
+        # [black, np.array([[1, 0]])],
     ]
 
     for i in tests:
         player = i[0]
-        for position in i[1]:
-            res = damagame.get_piece_legal_move(player, position)
-            # print("Piece: {} Moves: {}".format(position, res['legal_moves']))
-            res['tree'].show(data_property='position')
-            damagame.gameboard = zigzag
-            # res['tree'].save2file('tree.txt', data_property='gameboard')
 
-        print()
+        res = damagame.get_all_legal_moves(player=player)
+        pprint.pprint(res['move'])
+
+        print(damagame.getMetricsAfterMove(player, res['move'][0], res['remove'][0]))
+
+        # for position in i[1]:
+        #     tree = damagame.get_piece_legal_move(player, position)
+        #     tree.show(data_property='position')
+            
+        #     b =  dama.listFromTree(tree)
+            
+        #     move_list = b['move']
+        #     remove_list = b['remove']
+        #     count_list = b['count']
+
+        #     for move, remove, count in zip(move_list, remove_list, count_list):
+        #         print("{:<10}: {}".format('move', move))
+        #         print("{:<10}: {}".format('remove', remove))
+        #         print("{:<10}: {}".format('count', count))
+        #         print()
+
+
+        # for position in i[1]:
+        #     tree = damagame.get_piece_legal_move(player, position)
+        #     # print("Piece: {} Moves: {}".format(position, res['legal_moves']))
+        #     tree.show(data_property='position')
+            
+        #     b =  dama.listFromTree(tree)
+        #     move_list = b['move']
+        #     remove_list = b['remove']
+        #     count_list = b['count']
+
+        #     max_indices = np.argwhere(count_list == np.amax(count_list)).flatten().tolist()
+        #     print(max_indices)
+    
+        #     for move, remove, count in zip(move_list, remove_list, count_list):
+        #         print("{:<10}: {}".format('move', move))
+        #         print("{:<10}: {}".format('remove', remove))
+        #         print("{:<10}: {}".format('count', count))
+        #         print()
+
+        #     damagame.gameboard = tripleJumpPromotedMiddle
+
+        # print()

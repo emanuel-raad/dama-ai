@@ -3,6 +3,7 @@ from dama.agents.player import Player
 from dama.game.constants import Pieces
 from dama.game.constants import Color
 from dama.game.gameboard import Gameboard
+import os
 
 from dama.game import direction
 from treelib import Node, Tree
@@ -16,32 +17,141 @@ class State(object):
 
     Tag is a string representation of the position
     '''
-    def __init__(self, gameboard, position):
+    def __init__(self, gameboard, position, removed):
         self.gameboard = gameboard
         self.position = position
+        self.removed = removed
         self.tag = np.array2string(position)
+        if removed is None:
+            self.remove_tag = 'None'
+        else:
+            self.remove_tag = np.array2string(removed)
 
 class DamaGame:
     def __init__(self, board=None):
         self.n_turns = 0
         self.gameboard = Gameboard(gameboard = board)
+        self.white_player = None
+        self.black_player = None
+        self.starting_player_color = None
 
-    def get_all_legal_moves(self, gameboard, player):
-        
-        legal_moves = []
+    def setAgent(self, agent):
+        if agent.color == Color.WHITE:
+            self.white_player = agent
+        elif agent.color == Color.BLACK:
+            self.black_player = agent
 
-        for x in range(0, self.gameboard.rows):
-            for y in range(0, self.gameboard.cols):
-                if self.gameboard.player_owns_piece(player, [x, y]):
-                    pass
-                else:
-                    pass
+    def checkAgentStatus(self):
+        return self.white_player is not None and self.black_player is not None
 
-        return legal_moves
+    def setStartingPlayer(self, agent):
+        self.starting_player_color = agent.color
+
+    def start_game(self):
+        if not self.checkAgentStatus():
+            print("Error, not all agents are set.")
+            return
+
+        running = True
+
+        if self.starting_player_color is None or self.starting_player_color == Color.WHITE:
+            agentFlipFlop = True
+        else:
+            agentFlipFlop = False
+
+        while running:
+            if agentFlipFlop:
+                current_player = self.white_player
+            else:
+                current_player = self.black_player
+
+            # Process Events
+            self.increment_turn()
+
+            # Draw
+            self.gameboard.print_board()
+            print("{}'s turn".format(current_player.color))
+            print("Turn: {}".format(self.n_turns))
+            print()
+
+            # Update
+            # Get all posible moves
+            res = self.get_all_legal_moves(current_player)
+
+            # Ask the player for his choice
+            choice = current_player.request_move(res['move'], res['remove'])
+            print("You picked {}".format(choice))
+
+            # Perform the player's move
+            self.performMove(res['move'][choice], res['remove'][choice])
+
+            # End turn
+
+            # check win status
+            if self.n_turns == 100:
+                running = False
+            # check promote status
+            self.check_for_promotions()
+
+            # Switch the player
+            agentFlipFlop = not agentFlipFlop
+            # Clear the screen
+            os.system('cls' if os.name == 'nt' else 'clear')
+
+    def check_for_promotions(self, temp_gameboard=False):
+        if temp_gameboard == False:
+            gameboard = self.gameboard
+        else:
+            gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+
+        row_index = [0, gameboard.rows - 1]
+        for i in row_index:
+            for j in range(gameboard.cols):
+                pos = np.array([i, j])
+                if i == 0:
+                    if gameboard.at(pos) == Pieces.BLACK:
+                        gameboard.gameboard[i][j] = Pieces.BLACK_PROMOTED
+                elif i == gameboard.rows - 1:
+                    if gameboard.at(pos) == Pieces.WHITE:
+                        gameboard.gameboard[i][j] = Pieces.WHITE_PROMOTED
+
+    def get_all_legal_moves(self, player, gameboard=None):
+
+        if gameboard is None:
+            gameboard = self.gameboard
+
+        all_move_list = []
+        all_remove_list = []
+        all_count_list = []
+
+        for x in range(0, gameboard.rows):
+            for y in range(0, gameboard.cols):
+                pos = np.array([x, y])
+                if gameboard.player_owns_piece(player, pos):
+                    all_possible_move_tree = self.get_piece_legal_move(player, pos)
+                    
+                    if all_possible_move_tree.depth() > 0:
+                        b =  listFromTree(all_possible_move_tree)
+
+                        all_move_list.extend(b['move'])
+                        all_remove_list.extend(b['remove'])
+                        all_count_list.extend(b['count'])
+
+        max_indices = np.argwhere(all_count_list == np.amax(all_count_list)).flatten().tolist()
+
+        valid_moves = [all_move_list[i] for i in max_indices]
+        valid_removes = [all_remove_list[i] for i in max_indices]
+        valid_counts = [all_count_list[i] for i in max_indices]
+
+        return {
+            'move' : valid_moves,
+            'remove' : valid_removes,
+            'count' : valid_counts
+        }
 
     def get_piece_legal_move(
         self, player, position, startPosition = None,
-        pieces_to_remove = None, current_gameboard = None,
+        current_gameboard = None, lastRemoved = None,
         movetree = None, lastNode = None, canMove = True, hasJumped = False
     ):
 
@@ -52,8 +162,6 @@ class DamaGame:
         '''
 
         # Initialize empty lists
-        if pieces_to_remove is None:
-            pieces_to_remove = []
         if current_gameboard is None:
             current_gameboard = self.gameboard
 
@@ -64,7 +172,7 @@ class DamaGame:
         if current_gameboard.player_owns_piece(player, position):
 
             # Create a node for the tree from the current state of the game
-            state = State(current_gameboard, position)
+            state = State(current_gameboard, position, lastRemoved)
             node = Node(tag=state.tag, data=state)
 
             # if current_gameboard.player_owns_piece(player, position):
@@ -133,7 +241,7 @@ class DamaGame:
 
                                 self.get_piece_legal_move(
                                     player, next, startPosition = position,
-                                    pieces_to_remove = None, current_gameboard = temp_gameboard,
+                                    current_gameboard = temp_gameboard, lastRemoved=jumpablePiece,
                                     movetree = movetree, lastNode = node, canMove = False, hasJumped = True
                                 )
 
@@ -142,7 +250,7 @@ class DamaGame:
                             temp_gameboard = Gameboard(gameboard=np.copy(current_gameboard.gameboard))
                             temp_gameboard.move_piece(position, next)
 
-                            new_state = State(temp_gameboard, next)
+                            new_state = State(temp_gameboard, next, None)
                             new_node = Node(tag=new_state.tag, data=new_state)
 
                             movetree.add_node(new_node, parent=node)
@@ -154,11 +262,11 @@ class DamaGame:
                             jumpIsAvailable = True
                             jumpablePiece = next
 
-        return {
-            'legal_moves' : [],
-            'remove' : pieces_to_remove,
-            'tree' : movetree
-        }
+                # remove list
+                # move list
+
+
+        return movetree
 
     # def check_win_state(self, Player):
     def check_win_state(self):
@@ -170,3 +278,81 @@ class DamaGame:
     
     def increment_turn(self):
         self.n_turns += 1
+
+    def performMove(self, moveList, removeList, temp_gameboard=False):
+
+        if temp_gameboard == False:
+            gameboard = self.gameboard
+        else:
+            gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+
+        for i in range(len(moveList)):
+            if i == 0:
+                pass
+            else:
+                gameboard.move_piece(moveList[i-1], moveList[i])
+                if removeList[i] is not None:
+                    gameboard.remove_piece(removeList[i])
+
+    # Kind of obsolete
+    def getMetricsAfterMove(self, player, moveList, removeList):
+        temp_gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
+
+        for i in range(len(moveList)):
+            if i == 0:
+                pass
+            else:
+                temp_gameboard.move_piece(moveList[i-1], moveList[i])
+                if removeList[i] is not None:
+                    temp_gameboard.remove_piece(removeList[i])
+
+        return temp_gameboard.metrics(player)
+
+def listFromTree(tree):
+    tag_paths = []
+    remove_paths = []
+    count_list = []
+    for i in tree.paths_to_leaves():
+        path = []
+        r = []
+        for j in i:
+            path.append(tree.get_node(j).data.position)
+            r.append(tree.get_node(j).data.removed)
+
+        tag_paths.append(path)
+        remove_paths.append(r)
+        count_list.append(countRemoves(r))
+    
+    return {
+        'move' : tag_paths,
+        'remove' : remove_paths,
+        'count' : count_list
+    }
+
+def setFromTree(tree):
+    tag_paths = []
+    remove_paths = []
+    for i in tree.paths_to_leaves():
+        path = []
+        r = []
+        for j in i:
+            path.append(tree.get_node(j).data.tag)
+            r.append(tree.get_node(j).data.remove_tag)
+
+        tag_paths.append(path)
+        remove_paths.append(r)
+    
+    move_set = set(map(tuple, tag_paths))
+    remove_set = set(map(tuple, remove_paths))
+
+    return {
+        'move' : move_set,
+        'remove' : remove_set
+    }
+
+def countRemoves(remove_list):
+    count = 0
+    for i in remove_list:
+        if i is not None:
+            count = count + 1
+    return count

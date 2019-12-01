@@ -56,7 +56,7 @@ class Gameboard:
         else:
             raise IndexError("Position outside of board")
 
-    def player_owns_piece(self, player, position): 
+    def player_owns_piece(self, player, position):
         piece = self.at(position)
         
         if player.color == Color.WHITE:
@@ -90,3 +90,31 @@ class Gameboard:
                     count = count + 1
         
         return count
+
+    def metrics(self, player):
+
+        if player.color == Color.BLACK:
+            myPieces = np.count_nonzero(self.gameboard == Pieces.BLACK)
+            myPromoted = np.count_nonzero(self.gameboard == Pieces.BLACK_PROMOTED)
+            opponentPieces = np.count_nonzero(self.gameboard == Pieces.WHITE)
+            opponentPromoted = np.count_nonzero(self.gameboard == Pieces.WHITE_PROMOTED)
+        else:
+            myPieces = np.count_nonzero(self.gameboard == Pieces.WHITE)
+            myPromoted = np.count_nonzero(self.gameboard == Pieces.WHITE_PROMOTED)
+            opponentPieces = np.count_nonzero(self.gameboard == Pieces.BLACK)
+            opponentPromoted = np.count_nonzero(self.gameboard == Pieces.BLACK_PROMOTED)
+
+        return {
+            'myPieces' : myPieces,
+            'myPromoted' : myPromoted,
+            'opponentPieces' : opponentPieces,
+            'opponentPromoted' : opponentPromoted
+        }
+
+    def print_board(self):
+
+        header = np.array(list(range(self.cols)))
+
+        print("{} {}".format(" ", header))
+        for i, row in enumerate(self.gameboard):
+            print("{} {}".format(i, row))
