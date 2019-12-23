@@ -93,6 +93,10 @@ class Gameboard:
 
     def metrics(self, player):
 
+        '''
+        Could loop over the board once, instead of four times
+        '''
+
         if player.color == Color.BLACK:
             myPieces = np.count_nonzero(self.gameboard == Pieces.BLACK)
             myPromoted = np.count_nonzero(self.gameboard == Pieces.BLACK_PROMOTED)

@@ -1,7 +1,10 @@
 from dama.game import dama
+
 from dama.agents.human import Human
 from dama.agents.random import Random
 from dama.agents.alphaBeta import AlphaBeta
+from dama.agents.helper import MoveCache
+
 from dama.game.constants import Color
 
 if __name__ == '__main__':
@@ -10,17 +13,24 @@ if __name__ == '__main__':
 
     game = dama.DamaGame()
 
+    # Two Humans
     # player1 = Human(Color.BLACK)
     # player2 = Human(Color.WHITE)
 
-    player1 = Human(Color.BLACK)
-    player2 = Random(Color.WHITE)
+    # Human and Random
+    # player1 = Human(Color.BLACK)
+    # player2 = Random(Color.WHITE)
 
+    # Two Randoms
     # player1 = Random(Color.BLACK)
     # player2 = Random(Color.WHITE)
 
-    # player1 = Human(Color.BLACK)
-    # player2 = AlphaBeta(Color.WHITE)
+    # AlphaBeta and Random
+    path = 'opening_moves_3ahead.cache'
+    moveCache = MoveCache(path=path, buildCache = False)
+    player1 = AlphaBeta(Color.BLACK, moveCache=moveCache, movesAhead=2)
+
+    player2 = Random(Color.WHITE)
 
     game.setAgent(player1)
     game.setAgent(player2)

@@ -8,6 +8,8 @@ from dama.game.constants import Color
 from dama.game.gameboard import Gameboard
 from dama.game import direction
 
+import time
+
 class State(object):
     '''
     Class to store the representation of the game at each
@@ -95,8 +97,11 @@ class DamaGame:
                 break
 
             # Ask the player for his choice
+            time1 = time.time()
             choice = current_player.request_move(self.gameboard, res['move'], res['remove'])
+            time2 = time.time()
             print("You picked {}".format(choice))
+            current_player.timeList.append(1000*(time2-time1))
 
             # Perform the player's move
             self.performMove(res['move'][choice], res['remove'][choice])
@@ -113,13 +118,16 @@ class DamaGame:
             agentFlipFlop = not agentFlipFlop
             # Clear the screen
             os.system('cls' if os.name == 'nt' else 'clear')
+            
+            self.white_player.cleanup()
+            self.black_player.cleanup()
         
         # Declare the winner
         if winner:
             print("Winner is {}".format(self.white_player.color))
         else:
             print("Winner is {}".format(self.black_player.color))
-
+        
     def check_for_promotions(self, temp_gameboard=None):
         if temp_gameboard is None:
             gameboard = self.gameboard
@@ -153,15 +161,15 @@ class DamaGame:
                 pos = np.array([x, y])
                 if gameboard.player_owns_piece(player, pos):
                     all_possible_move_tree = self.get_piece_legal_move(player, pos, current_gameboard=gameboard)
-                    
+
                     if all_possible_move_tree.depth() > 0:
                         b =  listFromTree(all_possible_move_tree)
 
                         all_move_list.extend(b['move'])
                         all_remove_list.extend(b['remove'])
                         all_count_list.extend(b['count'])
-        
-        if len(all_count_list) > 0:    
+
+        if len(all_count_list) > 0:
             max_indices = np.argwhere(all_count_list == np.amax(all_count_list)).flatten().tolist()
 
             valid_moves = [all_move_list[i] for i in max_indices]
@@ -217,7 +225,7 @@ class DamaGame:
             else:
                 # Create a new node as the child of the last node
                 movetree.add_node(node, parent=lastNode)
-
+            
             valid_directions = direction.get_valid_directions(
                 startPosition, position, player.color, current_gameboard.is_promoted(position)
             )
@@ -295,10 +303,8 @@ class DamaGame:
                         if not jumpIsAvailable:
                             jumpIsAvailable = True
                             jumpablePiece = next
-
                 # remove list
                 # move list
-
 
         return movetree
 
@@ -328,20 +334,6 @@ class DamaGame:
                 gameboard.move_piece(moveList[i-1], moveList[i])
                 if removeList[i] is not None:
                     gameboard.remove_piece(removeList[i])
-
-    # Kind of obsolete
-    def getMetricsAfterMove(self, player, moveList, removeList):
-        temp_gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
-
-        for i in range(len(moveList)):
-            if i == 0:
-                pass
-            else:
-                temp_gameboard.move_piece(moveList[i-1], moveList[i])
-                if removeList[i] is not None:
-                    temp_gameboard.remove_piece(removeList[i])
-
-        return temp_gameboard.metrics(player)
 
 def listFromTree(tree):
     tag_paths = []
