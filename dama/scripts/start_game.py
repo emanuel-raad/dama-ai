@@ -30,7 +30,7 @@ if __name__ == '__main__':
     moveCache = MoveCache(path=path, buildCache = False)
     player1 = AlphaBeta(Color.BLACK, moveCache=moveCache, movesAhead=2)
 
-    player2 = Random(Color.WHITE)
+    player2 = Human(Color.WHITE)
 
     game.setAgent(player1)
     game.setAgent(player2)

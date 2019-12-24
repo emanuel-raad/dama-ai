@@ -10,7 +10,6 @@ from dama.agents.placeholder import getPlaceholder
 from dama.game.constants import Color
 from dama.game.gameboard import Gameboard
 
-
 '''
 Some functions that will help the agent
 classes make trees of the possible
