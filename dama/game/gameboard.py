@@ -23,8 +23,8 @@ class Gameboard:
 
     def initialize_gameboard(self):
         self.gameboard = np.zeros((self.rows, self.cols), dtype='uint8')
-        self.gameboard[1:3] = Pieces.WHITE
-        self.gameboard[5:7] = Pieces.BLACK
+        self.gameboard[1:3] = Pieces.BLACK
+        self.gameboard[5:7] = Pieces.WHITE
 
     def promote_piece(self, position):
         pass

@@ -24,9 +24,9 @@ def get_valid_directions(startPosition, endPosition, color, promoted):
             valid_directions = np.delete(valid_directions, idx, axis=0)
 
         if color == Color.WHITE:
-            backwards = np.array([-1, 0])
-        elif color == Color.BLACK:
             backwards = np.array([1, 0])
+        elif color == Color.BLACK:
+            backwards = np.array([-1, 0])
 
         idx = np.where((valid_directions == backwards).all(axis=1))
         valid_directions = np.delete(valid_directions, idx, axis=0)

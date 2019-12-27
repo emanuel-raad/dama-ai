@@ -36,6 +36,6 @@ if __name__ == '__main__':
     game.setAgent(player2)
 
     # If not set, then the white player starts first
-    # game.setStartingPlayer(player1)
+    game.setStartingPlayer(player2)
 
     game.start_game()

@@ -19,8 +19,8 @@ class AlphaBeta(Player):
         metrics = board.metrics(getPlaceholder(color))
 
         score = (
-              1 * (metrics['myPieces'] - metrics['opponentPieces'])
-            + 5 * (metrics['myPromoted'] - metrics['opponentPromoted'])
+              2 * metrics['myPieces'] - 1 * metrics['opponentPieces']
+            + 4 * metrics['myPromoted'] - 5 * metrics['opponentPromoted']
         )
 
         return score

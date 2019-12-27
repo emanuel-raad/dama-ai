@@ -35,6 +35,7 @@ class DamaGame:
         self.white_player = None
         self.black_player = None
         self.starting_player_color = None
+        self.current_player = None
 
     def setAgent(self, agent):
         if agent.color == Color.WHITE:
@@ -45,8 +46,35 @@ class DamaGame:
     def checkAgentStatus(self):
         return self.white_player is not None and self.black_player is not None
 
-    def setStartingPlayer(self, agent):
-        self.starting_player_color = agent.color
+    def setStartingPlayer(self, player):
+        self.starting_player_color = player.color
+        self.current_player = player
+
+    def checkWinState(self, player, moves):
+        '''
+        1. Opponent has no legal moves (all pieces are captured, or completely blocked)
+        2. King vs. single man
+        '''
+        # Check Win State
+        metrics = self.gameboard.metrics(player)
+        if (
+            # No moves left
+            len(moves) == 0 or
+            (
+            # Little dude vs King
+            metrics['myPieces'] == 1
+            and metrics['myPromoted'] == 0
+            and metrics['opponentPieces'] == 0
+            and metrics['opponentPromoted'] == 1
+            )
+        ):
+            return True
+
+    def nextPlayer(self):
+        if self.current_player == self.white_player:
+            self.current_player = self.black_player
+        else:
+            self.current_player = self.white_player
 
     def start_game(self):
         if not self.checkAgentStatus():
@@ -80,18 +108,7 @@ class DamaGame:
             res = self.get_all_legal_moves(current_player)
             
             # Check Win State
-            metrics = self.gameboard.metrics(current_player)
-            if (
-                # No moves left
-                len(res['move']) == 0 or
-                (
-                # Little dude vs King
-                metrics['myPieces'] == 1
-                and metrics['myPromoted'] == 0
-                and metrics['opponentPieces'] == 0
-                and metrics['opponentPromoted'] == 1
-                )
-            ):
+            if self.checkWinState(current_player, res['move']):
                 running = False
                 winner = not agentFlipFlop
                 break
@@ -138,10 +155,10 @@ class DamaGame:
         for i in row_index:
             for j in range(gameboard.cols):
                 pos = np.array([i, j])
-                if i == 0:
+                if i == gameboard.rows - 1:
                     if gameboard.at(pos) == Pieces.BLACK:
                         gameboard.gameboard[i][j] = Pieces.BLACK_PROMOTED
-                elif i == gameboard.rows - 1:
+                elif i == 0:
                     if gameboard.at(pos) == Pieces.WHITE:
                         gameboard.gameboard[i][j] = Pieces.WHITE_PROMOTED
 
@@ -307,14 +324,6 @@ class DamaGame:
                 # move list
 
         return movetree
-
-    # def check_win_state(self, Player):
-    def check_win_state(self):
-        '''
-        1. Opponent has no legal moves (all pieces are captured, or completely blocked)
-        2. King vs. single man
-        '''
-        pass
     
     def increment_turn(self):
         self.n_turns += 1
@@ -326,6 +335,11 @@ class DamaGame:
         else:
             # gameboard = Gameboard(gameboard=np.copy(self.gameboard.gameboard))
             gameboard = temp_gameboard
+
+        # print("Performing move...")
+        # print(gameboard.gameboard)
+        # print(moveList)
+        # print(removeList)
 
         for i in range(len(moveList)):
             if i == 0:
@@ -383,3 +397,19 @@ def countRemoves(remove_list):
         if i is not None:
             count = count + 1
     return count
+    
+# Singleton
+class DamaSingleton:
+   __instance = None
+   @staticmethod 
+   def getInstance():
+      """ Static access method. """
+      if DamaSingleton.__instance == None:
+         DamaSingleton()
+      return DamaSingleton.__instance
+   def __init__(self):
+      """ Virtually private constructor. """
+      if DamaSingleton.__instance != None:
+         raise Exception("This class is a singleton!")
+      else:
+         DamaSingleton.__instance = DamaGame()
