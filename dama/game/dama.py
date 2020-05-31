@@ -9,6 +9,7 @@ from dama.game.gameboard import Gameboard
 from dama.game import direction
 
 import time
+import logging
 
 class State(object):
     '''
@@ -105,6 +106,7 @@ class DamaGame:
 
             # Update
             # Get all posible moves
+
             res = self.get_all_legal_moves(current_player)
             
             # Check Win State
@@ -118,7 +120,9 @@ class DamaGame:
             choice = current_player.request_move(self.gameboard, res['move'], res['remove'])
             time2 = time.time()
             print("You picked {}".format(choice))
-            current_player.timeList.append(1000*(time2-time1))
+
+            if current_player.type == "AI":
+                logging.debug("AI - time to pick move: {}ms".format(1000*(time2-time1)))
 
             # Perform the player's move
             self.performMove(res['move'][choice], res['remove'][choice])
@@ -177,7 +181,9 @@ class DamaGame:
             for y in range(0, gameboard.cols):
                 pos = np.array([x, y])
                 if gameboard.player_owns_piece(player, pos):
+                    time1 = time.time()
                     all_possible_move_tree = self.get_piece_legal_move(player, pos, current_gameboard=gameboard)
+                    time2 = time.time()
 
                     if all_possible_move_tree.depth() > 0:
                         b =  listFromTree(all_possible_move_tree)
@@ -216,7 +222,6 @@ class DamaGame:
 
         startPosition is the original position of that move, before any jumps have been made
         '''
-
         # Initialize empty lists
         if current_gameboard is None:
             current_gameboard = self.gameboard

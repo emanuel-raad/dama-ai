@@ -3,12 +3,14 @@ import time
 import hashlib
 import pickle
 import os
+import logging
 from treelib import Node, Tree
 
 from dama.game.dama import DamaGame
 from dama.agents.placeholder import getPlaceholder
 from dama.game.constants import Color
 from dama.game.gameboard import Gameboard
+from dama.game.fenController import board2fen
 
 '''
 Some functions that will help the agent
@@ -58,7 +60,7 @@ class MoveCache():
     
     @staticmethod
     def hashBoard(board):
-        return hashlib.md5(str(board).encode('utf-8')).hexdigest()
+        return board2fen(board)
 
     def cacheMove(self, key, tree):
         if self.buildCache:
@@ -119,6 +121,8 @@ def buildMoveTree(
     if game is None:
         game = DamaGame(board=parentBoard)
 
+    average_get_legal_moves_times = []
+
     for move, remove in zip(moveList, removeList):
         
         start = time.time()
@@ -140,17 +144,20 @@ def buildMoveTree(
         res = game.get_all_legal_moves(player, temp_gameboard=childBoard)
         time4 = time.time()
 
-        # print("Time to copy board     : {:4.0f} ms".format(1000*(time1 - start)))
-        # print("Time to perform move   : {:4.0f} ms".format(1000*(time2 - time1)))
-        # print("Time to add to tree    : {:4.0f} ms".format(1000*(time3 - time2)))
-        # print("Time to get next moves : {:4.0f} ms".format(1000*(time4 - time3)))
-        # print()
+        average_get_legal_moves_times.append(1000*(time4 - time3))
+
+        # logging.debug("Time to copy board     : {:4.0f} ms".format(1000*(time1 - start)))
+        # logging.debug("Time to perform move   : {:4.0f} ms".format(1000*(time2 - time1)))
+        # logging.debug("Time to add to tree    : {:4.0f} ms".format(1000*(time3 - time2)))
+        # logging.debug("Time to get next moves : {:4.0f} ms".format(1000*(time4 - time3)))
 
         if depth is not 0:
             buildMoveTree(
                 childBoard, res['move'], res['remove'], player.color, depth - 1,
                 tree, node
             )
+
+    logging.debug("Average time for each move: {}ms".format(np.average(average_get_legal_moves_times)))
 
     return tree
 

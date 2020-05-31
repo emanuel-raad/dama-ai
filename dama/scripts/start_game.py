@@ -7,10 +7,13 @@ from dama.agents.helper import MoveCache
 
 from dama.game.constants import Color
 
+import logging
+
 if __name__ == '__main__':
 
     print("Hello World!")
 
+    logging.basicConfig(level=logging.DEBUG)
     game = dama.DamaGame()
 
     # Two Humans
@@ -28,7 +31,7 @@ if __name__ == '__main__':
     # AlphaBeta and Random
     path = 'opening_moves_3ahead.cache'
     moveCache = MoveCache(path=path, buildCache = False)
-    player1 = AlphaBeta(Color.BLACK, moveCache=moveCache, movesAhead=2)
+    player1 = AlphaBeta(Color.BLACK, movesAhead=2)
 
     player2 = Human(Color.WHITE)
 

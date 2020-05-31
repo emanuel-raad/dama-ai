@@ -8,6 +8,7 @@ class Player(ABC):
         self.color = color
         self.moveCache = moveCache
         self.timeList = []
+        self.type = 'AI'
 
     @abstractmethod
     def request_move(self, board, moveList, removeList):

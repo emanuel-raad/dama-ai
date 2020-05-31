@@ -8,7 +8,7 @@
             "name": "Dama on PC",
             "type": "python",
             "request": "launch",
-            "module": "dama",
+            "module": "dama.scripts.start_game",
             "cwd": "H:\\Coding\\dama-ai"
         },
         {
