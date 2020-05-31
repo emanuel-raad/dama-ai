@@ -3,6 +3,8 @@ from dama.agents.player import Player
 from dama.game.constants import Pieces
 from dama.game.constants import Color
 
+from dama.game.move import Move, MoveType
+
 class Gameboard:
     '''
     Represent the game board.
@@ -15,6 +17,7 @@ class Gameboard:
 
         self.rows = rows
         self.cols = cols
+        self.moveList = []
 
         if gameboard is None:
             self.initialize_gameboard()
@@ -28,6 +31,35 @@ class Gameboard:
 
     def promote_piece(self, position):
         pass
+
+    def performMove(self, move : Move):
+        self.moveList.append(move)
+
+        if len(move.capturedPositions) > 0:
+            for c in move.capturedPositions:
+                self.remove_piece(c)
+            
+        start = move.moveTo[0]
+        end = move.moveTo[-1]
+
+        self.gameboard[end[0], end[1]] = self.at(start)
+        self.remove_piece(start)
+
+        # TODO should i check for promotions here or in the game loop?
+
+    def undoMove(self):
+        if len(self.moveList) > 0:
+            undo = self.moveList.pop()
+
+            # Restore the player's position
+            start = undo.moveTo[-1]
+            end = undo.moveTo[0]
+            self.gameboard[end[0], end[1]] = self.at(start)
+            self.remove_piece(start)
+            
+            # Restore the captured pieces
+            for c, p in zip(undo.capturedPositions, undo.capturedTypes):
+                self.gameboard[c[0], c[1]] = p
 
     def remove_piece(self, position):
         self.gameboard[position[0], position[1]] = Pieces.EMPTY
