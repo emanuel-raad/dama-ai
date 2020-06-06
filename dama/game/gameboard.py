@@ -1,9 +1,8 @@
 import numpy as np
-from dama.agents.player import Player
-from dama.game.constants import Pieces
-from dama.game.constants import Color
 
-from dama.game.move import Move, MoveType
+from dama.agents.player import Player
+from dama.game.constants import Pieces, Color
+from dama.game.move import Move
 
 class Gameboard:
     '''
@@ -68,6 +67,12 @@ class Gameboard:
         piece = self.at(startPosition)
         self.remove_piece(startPosition)
         self.gameboard[endPosition[0], endPosition[1]] = piece
+
+    def is_empty(self, position) -> bool:
+        if (self.at(position) == Pieces.EMPTY):
+            return True
+        else:
+            return False
 
     def is_promoted(self, position):
         if ((self.gameboard[position[0], position[1]] == Pieces.WHITE_PROMOTED) or 

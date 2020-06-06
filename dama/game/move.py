@@ -1,15 +1,10 @@
 import numpy as np
 
 from dataclasses import dataclass
-from enum import Enum
 from typing import List
 
 from dama.game.constants import Color
 from dama.game.constants import Pieces
-
-class MoveType(Enum):
-    JUMP = 1
-    SLIDE = 2
 
 @dataclass
 class Move:
