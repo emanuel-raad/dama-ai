@@ -211,6 +211,20 @@ class DamaGame:
                 'count' : []
             }
 
+    def get_piece_legal_move2(
+        self, position, color
+    ):
+
+
+        valid_directions = direction.get_valid_directions(
+            position, position, color, self.gameboard.is_promoted(position)
+        )
+
+
+        return True
+
+
+
     def get_piece_legal_move(
         self, player, position, startPosition = None,
         current_gameboard = None, lastRemoved = None,
