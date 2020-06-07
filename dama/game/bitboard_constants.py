@@ -125,3 +125,33 @@ class KingZigzag(BoardParent):
 
     board = myPawn | myKing | oppPawn | oppKing
     oppBoard = oppPawn | oppKing
+
+@dataclass
+class PawnPromote(BoardParent):
+    myPawn = array2bit(np.array([
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 1, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0]
+            ]))
+
+    oppPawn = array2bit(np.array([
+                [0, 0, 0, 0, 1, 0, 0, 0],
+                [1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [1, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 1, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0]
+            ]))
+
+    myKing = np.uint64(0)
+    oppKing = np.uint64(0)
+
+    board = myPawn | myKing | oppPawn | oppKing
+    oppBoard = oppPawn | oppKing

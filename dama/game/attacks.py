@@ -5,7 +5,7 @@ import numpy as np
 
 from bitOperations import *
 from bitboard import *
-from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag
+from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag, PawnPromote
 
 from treelib import Node, Tree
 
@@ -256,20 +256,6 @@ def get_all_king_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
     return moveTree
 
 
-# Need to take promotions into account
-# A pawn could move to the eigth row and become a king. Then the move generation rules change
-# Consider generalizing this function, and applying the appropriate move generation
-# depending on the piece type of pos.
-# A lot of the code is repeated anyway:
-# 
-# Query my bitboards (myPawn, myKing) to check if 'pos' is a king or pawn:
-# if king                 -> do king move gen
-# if pawn, and at 8th row -> promote to king, do king move gen
-# if pawn                 -> do pawn move gen
-# 
-# Best approach (but a lot of work) would be to generate magic bitboards for the pawns as well
-# Then just pass the appropriate lookup table to the func
-#
 # To speed up computation for the game move generation:
 # if get_all_pawn_moves returns a jump, then call get_all_king_moves(canMove=False)
 # to ignore the sliding move generation. They will be pruned out anyway since there is a mandatory
@@ -381,7 +367,6 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
         firstAttackQuery = get_king_attack(pos, board)
         attacks = firstAttackQuery & oppBoard
 
-
     if (attacks):
         # Potentially an enemy being attacked. Let's run this again to make sure
 
@@ -395,11 +380,6 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             tempBoard = board & ~attacks
             # Run again
             landingSpots = get_king_attack(pos, tempBoard) & ~firstAttackQuery & ~board
-
-        # print("Attacks2 and landing spots")
-        # print_bitboard([ attacks2, landingSpots])
-
-        # print_bitboard([ board, attacks, tempBoard, attacks2, landingSpots])
 
         # The case where the attack wasn't valid, but the king can still move
         # Only kings are every going to reach this point of the logic
@@ -444,9 +424,11 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                         elif isKing:
                             childMyKing = move_piece(pos, land, childMyKing)
 
-                        # Should check for promotions here, after moving the piece
-                        # And apply them appropriately so that the next loop
-                        # Takes it into account
+                        isPromoted, promotePos = check_promotions(childMyPawn)
+                        if isPromoted:
+                            # print("PROMOTED")
+                            childMyPawn, childMyKing = promote(promotePos, childMyPawn, childMyKing)
+                            # the board overall doesn't change so no need to update
 
                         get_all_generalized_moves(
                             land, childBoard, childMyPawn, childMyKing, childOppBoard,
@@ -457,14 +439,9 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
         # No attacks availalbe, can only move
         slide = np.uint64(0)
         if is_piece_present(pos, myPawn):
-            # The square where the pawn would land
             slide = get_active_indices(pawnSingleMasks[pos] & ~board)
         elif is_piece_present(pos, myKing):
             slide = get_active_indices(attacks & ~board)
-
-        # if len(slide) > 0:
-            # print("Only slide moves available")
-            # print(slide)
 
         for i in slide:
             childMove = MoveNode(i, None)
@@ -475,135 +452,12 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
 
 
 if __name__ == '__main__':
-    king = np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ])
-    king = array2bit(king)
-
-    # Slides
-    # oppBoard = np.array([
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 1, 0, 1, 0, 1, 1, 0],
-    #             [1, 0, 0, 0, 0, 0, 0, 1],
-    #             [0, 0, 1, 0, 1, 0, 1, 0],
-    #             [1, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 1, 0, 1, 0, 1, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 1, 0],
-    #             [0, 1, 0, 1, 0, 1, 0, 0]
-    #         ])
-    # oppBoard = array2bit(oppBoard)
-
-    # Jumps
-    oppBoard = np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 1, 1, 0, 1, 1, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ])
-    oppBoard = array2bit(oppBoard)
-
-    # oppBoard = np.array([
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 0, 0, 0, 0, 0, 0],
-    #             [0, 0, 1, 0, 0, 0, 0, 0],
-    #             [0, 1, 0, 0, 0, 0, 0, 0],
-    #         ])
-    # oppBoard = array2bit(oppBoard)
-
-    myPawn = np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ])
-    myPawn = array2bit(myPawn)
-
-
-    board = king | oppBoard | myPawn
-    empty = ~board
-    
     import time
-    time1 = time.time()
-
-    # pos = get_active_indices(king)[0]
-    # moveTree = get_all_king_moves(pos, board, myPawn, oppBoard)
-
-    # time2 = time.time()
-    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
-
-    # # moveTree.show()
-    # # print(moveTree.depth())
-
-    # # Filter for only the longest branches
-    # lengths = [len(m) for m in moveTree.paths_to_leaves()]
-    # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-    # print("Number of computed paths : {}".format(len(lengths)))
-    # print("Number of valid paths    : {}".format(len(maxLengths)))
-
-    # ################################################
-    # PAWN
-
-    # pos = get_active_indices(myPawn)[0]
-    # moveTree = get_all_pawn_moves(pos, board, myPawn, oppBoard)
-
-    # time2 = time.time()
-    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
-
-    # moveTree.show()
-    # # print(moveTree.depth())
-
-    # # Filter for only the longest branches
-    # lengths = [len(m) for m in moveTree.paths_to_leaves()]
-    # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-    # print("Number of computed paths : {}".format(len(lengths)))
-    # print("Number of valid paths    : {}".format(len(maxLengths)))
-
-    # ################################################
-    # Starting board moves
-
-    # oppPawn = initialize_board([5, 6])
-    # myPawn = initialize_board([1, 2])
-    # board = oppPawn | myPawn
-
-    # time1 = time.time()
-
-    # for pos in get_active_indices(myPawn):
-    #     moveTree = get_all_pawn_moves(pos, board, myPawn, oppPawn)
-    #     # moveTree.show()
-    #     # print(moveTree.depth())
-
-    #     # Filter for only the longest branches
-    #     # lengths = [len(m) for m in moveTree.paths_to_leaves()]
-    #     # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-    #     # print("Number of computed paths : {}".format(len(lengths)))
-    #     # print("Number of valid paths    : {}".format(len(maxLengths)))
-
-    # time2 = time.time()
-    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
 
     # ################################################
     # Generalized Routine
 
-    def evaluate(boardClass:BoardParent, printTree=True, printPaths=False):
+    def evaluate(boardClass:BoardParent, printTree=True, printPaths=True):
         time1 = time.time()
 
         moveTreeListP = []
@@ -624,23 +478,32 @@ if __name__ == '__main__':
         print("Completed {} in {:.4f} ms".format(boardClass.__name__, 1000*(time2-time1)))
 
         if printTree or printPaths:
-            print("Pawn Info:")
+            pseudoPathCount = 0
+            validPathCount = 0
+
             for m in moveTreeListP:
                 if printTree: m.show()
+                if printPaths:
+                    lengths = [len(x) for x in m.paths_to_leaves()]
+                    maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+                    pseudoPathCount += len(lengths)
+                    validPathCount += len(maxLengths)
 
-            print("----------")
-
-            print("King Info:")
             for m in moveTreeListK:
                 if printTree: m.show()
                 if printPaths:
                     lengths = [len(x) for x in m.paths_to_leaves()]
                     maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-                    print("Number of computed paths : {}".format(len(lengths)))
-                    print("Number of valid paths    : {}".format(len(maxLengths)))
+                    pseudoPathCount += len(lengths)
+                    validPathCount += len(maxLengths)
 
+            if printPaths:
+                print("Number of computed paths : {}".format(len(lengths)))
+                print("Number of valid paths    : {}".format(len(maxLengths)))
+                print()
 
-    # evaluate(StartingBoard, printTree=True)
-    # evaluate(PawnJumps, printTree=True)
-    # evaluate(KingJumps)
-    # evaluate(KingZigzag, printTree=False, printPaths=True)
+    evaluate(StartingBoard, printTree=False)
+    evaluate(PawnJumps, printTree=False)
+    evaluate(KingJumps, printTree=False)
+    evaluate(KingZigzag, printTree=False)
+    evaluate(PawnPromote, printTree=False)

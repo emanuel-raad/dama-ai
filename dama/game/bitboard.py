@@ -194,3 +194,20 @@ rayMasks = [generate_ray_masks(x) for x in range(0, 63)]
 
 def get_ray_masks(x):
     return rayMasks[x]
+
+def promote(pos, myPawn, myKing):
+    myPawn = clear_bit(pos, myPawn)
+    myKing = set_bit(pos, myKing)
+
+    return myPawn, myKing
+
+def check_promotions(myPawn):
+    masked = myPawn & rowMask[7]
+    if masked != 0:
+        indices = get_active_indices(masked)
+        if len(indices) > 1 :
+            raise MultiplePawnPromote
+        else:
+            return True, indices[0]
+    else:
+        return False, 0
