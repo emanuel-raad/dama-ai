@@ -5,6 +5,7 @@ import numpy as np
 
 from bitOperations import *
 from bitboard import *
+from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag
 
 from treelib import Node, Tree
 
@@ -255,6 +256,28 @@ def get_all_king_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
     return moveTree
 
 
+# Need to take promotions into account
+# A pawn could move to the eigth row and become a king. Then the move generation rules change
+# Consider generalizing this function, and applying the appropriate move generation
+# depending on the piece type of pos.
+# A lot of the code is repeated anyway:
+# 
+# Query my bitboards (myPawn, myKing) to check if 'pos' is a king or pawn:
+# if king                 -> do king move gen
+# if pawn, and at 8th row -> promote to king, do king move gen
+# if pawn                 -> do pawn move gen
+# 
+# Best approach (but a lot of work) would be to generate magic bitboards for the pawns as well
+# Then just pass the appropriate lookup table to the func
+#
+# To speed up computation for the game move generation:
+# if get_all_pawn_moves returns a jump, then call get_all_king_moves(canMove=False)
+# to ignore the sliding move generation. They will be pruned out anyway since there is a mandatory
+# pawn jump, so might as well ignore them. 
+# 
+# Also calculate the pawn moves first since skipping the evaluating the 
+# king slides would be time consuming. Or maybe since there are more pawns it'll take more
+# time? Idk should experiment with it
 def get_all_pawn_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode = None, moveTree = None):
 
     if moveTree is None:        
@@ -333,6 +356,120 @@ def get_all_pawn_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
         else:
             # print("No moves available")
             pass
+
+    return moveTree
+
+
+
+def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = True, parentNode = None, moveTree = None):
+
+    # Initialize the move tree
+    if moveTree is None and parentNode is None:        
+        moveTree = Tree()
+        parentMove = MoveNode(moveTo=pos)
+        parentNode = Node(tag=parentMove.tag, data=parentMove)
+        moveTree.add_node(parentNode)
+
+    isKing = is_piece_present(pos, myKing)
+    isPawn = is_piece_present(pos, myPawn)
+
+    attacks = np.uint64(0)
+    firstAttackQuery = np.uint64(0)
+    if isPawn:
+        attacks = pawnSingleMasks[pos] & oppBoard
+    elif isKing:
+        firstAttackQuery = get_king_attack(pos, board)
+        attacks = firstAttackQuery & oppBoard
+
+
+    if (attacks):
+        # Potentially an enemy being attacked. Let's run this again to make sure
+
+        landingSpots = np.uint64(0)
+        if isPawn:
+            # The square where the pawn would land
+            landingSpots = pawnDoubleMasks[pos] & ~board
+
+        elif isKing:
+            # Remove the opp pieces that are being attacked
+            tempBoard = board & ~attacks
+            # Run again
+            landingSpots = get_king_attack(pos, tempBoard) & ~firstAttackQuery & ~board
+
+        # print("Attacks2 and landing spots")
+        # print_bitboard([ attacks2, landingSpots])
+
+        # print_bitboard([ board, attacks, tempBoard, attacks2, landingSpots])
+
+        # The case where the attack wasn't valid, but the king can still move
+        # Only kings are every going to reach this point of the logic
+        if landingSpots == 0 and canMove:
+            # print("Only king sliding moves available")
+            slide = get_active_indices(get_king_attack(pos, board) & ~board)
+            for i in slide:
+                child = MoveNode(i, None)
+                childNode = Node(tag=child.tag, data=child)
+                moveTree.add_node(childNode, parentNode)
+
+        else:
+            # print("Attacks available")
+            attack_dir = decompose_directions(pos, attacks)
+            landing_dir = decompose_directions(pos, landingSpots)
+
+            for a, l in zip(attack_dir, landing_dir):
+                potentialCapture = get_active_indices(a)
+
+                if len(potentialCapture) > 0:
+                    capture = potentialCapture[0]
+                    l_indices = get_active_indices(l)
+                    
+                    for land in l_indices:
+                        child = MoveNode(land, capture)
+                        childNode = Node(tag=child.tag, data=child)
+                        moveTree.add_node(childNode, parent=parentNode)
+                        
+                        childBoard = board
+                        childOppBoard = oppBoard
+                        childMyKing = myKing
+                        childMyPawn = myPawn
+
+                        # Remove the captured piece
+                        childOppBoard = clear_bit(capture, childOppBoard)
+                        childBoard = clear_bit(capture, childBoard)
+
+                        # Move the Piece
+                        childBoard = move_piece(pos, land, childBoard)
+                        if isPawn:
+                            childMyPawn = move_piece(pos, land, childMyPawn)
+                        elif isKing:
+                            childMyKing = move_piece(pos, land, childMyKing)
+
+                        # Should check for promotions here, after moving the piece
+                        # And apply them appropriately so that the next loop
+                        # Takes it into account
+
+                        get_all_generalized_moves(
+                            land, childBoard, childMyPawn, childMyKing, childOppBoard,
+                            canMove = False, parentNode = childNode, moveTree=moveTree
+                        )
+
+    elif attacks == 0 and canMove:
+        # No attacks availalbe, can only move
+        slide = np.uint64(0)
+        if is_piece_present(pos, myPawn):
+            # The square where the pawn would land
+            slide = get_active_indices(pawnSingleMasks[pos] & ~board)
+        elif is_piece_present(pos, myKing):
+            slide = get_active_indices(attacks & ~board)
+
+        # if len(slide) > 0:
+            # print("Only slide moves available")
+            # print(slide)
+
+        for i in slide:
+            childMove = MoveNode(i, None)
+            childNode = Node(tag=childMove.tag, data=childMove)
+            moveTree.add_node(childNode, parent=parentNode)
 
     return moveTree
 
@@ -443,31 +580,67 @@ if __name__ == '__main__':
     # ################################################
     # Starting board moves
 
-    oppPawn = initialize_board([5, 6])
-    myPawn = initialize_board([1, 2])
-    board = oppPawn | myPawn
+    # oppPawn = initialize_board([5, 6])
+    # myPawn = initialize_board([1, 2])
+    # board = oppPawn | myPawn
 
-    time1 = time.time()
+    # time1 = time.time()
 
-    for pos in get_active_indices(myPawn):
-        moveTree = get_all_pawn_moves(pos, board, myPawn, oppPawn)
-        # moveTree.show()
-        # print(moveTree.depth())
+    # for pos in get_active_indices(myPawn):
+    #     moveTree = get_all_pawn_moves(pos, board, myPawn, oppPawn)
+    #     # moveTree.show()
+    #     # print(moveTree.depth())
 
-        # Filter for only the longest branches
-        # lengths = [len(m) for m in moveTree.paths_to_leaves()]
-        # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-        # print("Number of computed paths : {}".format(len(lengths)))
-        # print("Number of valid paths    : {}".format(len(maxLengths)))
+    #     # Filter for only the longest branches
+    #     # lengths = [len(m) for m in moveTree.paths_to_leaves()]
+    #     # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+    #     # print("Number of computed paths : {}".format(len(lengths)))
+    #     # print("Number of valid paths    : {}".format(len(maxLengths)))
 
-    time2 = time.time()
-    print("Completed in {:.4f} ms".format(1000*(time2-time1)))
+    # time2 = time.time()
+    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
 
-    # To speed up computation for the game move generation:
-    # if get_all_pawn_moves returns a jump, then call get_all_king_moves(canMove=False)
-    # to ignore the sliding move generation. They will be pruned out anyway since there is a mandatory
-    # pawn jump, so might as well ignore them. 
-    # 
-    # Also calculate the pawn moves first since skipping the evaluating the 
-    # king slides would be time consuming. Or maybe since there are more pawns it'll take more
-    # time? Idk should experiment with it
+    # ################################################
+    # Generalized Routine
+
+    def evaluate(boardClass:BoardParent, printTree=True, printPaths=False):
+        time1 = time.time()
+
+        moveTreeListP = []
+        moveTreeListK = []
+
+
+        for posP in get_active_indices(boardClass.myPawn):
+            moveTreeListP.append(
+                get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+            )
+
+        for posK in get_active_indices(boardClass.myKing):
+            moveTreeListK.append(
+                get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+            )
+
+        time2 = time.time()
+        print("Completed {} in {:.4f} ms".format(boardClass.__name__, 1000*(time2-time1)))
+
+        if printTree or printPaths:
+            print("Pawn Info:")
+            for m in moveTreeListP:
+                if printTree: m.show()
+
+            print("----------")
+
+            print("King Info:")
+            for m in moveTreeListK:
+                if printTree: m.show()
+                if printPaths:
+                    lengths = [len(x) for x in m.paths_to_leaves()]
+                    maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+                    print("Number of computed paths : {}".format(len(lengths)))
+                    print("Number of valid paths    : {}".format(len(maxLengths)))
+
+
+    # evaluate(StartingBoard, printTree=True)
+    # evaluate(PawnJumps, printTree=True)
+    # evaluate(KingJumps)
+    # evaluate(KingZigzag, printTree=False, printPaths=True)

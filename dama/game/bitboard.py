@@ -1,7 +1,9 @@
+import struct
+
 import numpy as np
 from multipledispatch import dispatch
-import struct
-from bitOperations import set_bit, clear_bit
+
+from bitOperations import clear_bit, set_bit
 
 u64high = np.uint64(0xffffffffffffffff)
 
@@ -28,12 +30,17 @@ colMask[7] = np.uint64(0b1000000010000000100000001000000010000000100000001000000
 emptyBoard = np.uint64(0)
 row_size = 8
 
-def is_piece_present(board : int, row : int, col : int) -> bool:
-    one = np.uint64(1)
-    shift = np.uint64((row * row_size + col))
-    mask = one << shift
-    return ((board & mask) != 0)
- 
+# @dispatch(int, int, int)
+# def is_piece_present(board : int, row : int, col : int) -> bool:
+#     one = np.uint64(1)
+#     shift = np.uint64((row * row_size + col))
+#     mask = one << shift
+#     return ((board & mask) != 0)
+
+def is_piece_present(pos, board) -> bool:
+    mask = np.uint64(1) << np.uint64(pos)
+    return (board & mask) != 0
+
 def set_cell_value(board : int, row : int, col : int, value:int) -> int:
     shift = np.uint64((row * row_size + col))
     newBit = np.uint64(value) << shift
