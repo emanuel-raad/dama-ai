@@ -1,6 +1,7 @@
 import numpy as np
 from multipledispatch import dispatch
 import struct
+from bitOperations import set_bit, clear_bit
 
 u64high = np.uint64(0xffffffffffffffff)
 
@@ -147,3 +148,42 @@ def get_active_indices(board : int):
         board >>= one # discard the right-most bit
         index += 1
     return one_bit_indexes
+
+def move_piece(start, end, board):
+    board = set_bit(end, board)
+    board = clear_bit(start, board)
+    return board
+
+# Just to have an interface in the bitboard file
+# Should make bitboard a class with all of these basic functions
+# that the game rules can call
+def remove(pos, board):
+    return clear_bit(pos, board)
+
+def generate_ray_masks(x):
+    row, col = get_row_col(x)
+
+    north = np.uint64(0)
+    south = np.uint64(0)
+    east = np.uint64(0)
+    west = np.uint64(0)
+
+    for i in range(1, 8-row):
+        north = set_bit(i*8 + x, north)
+
+    for i in range(1, row+1):
+        south = set_bit(x - i*8, south)
+
+    for i in range(1, 8-col):
+        east = set_bit(x + i, east)
+
+    for i in range(1, col+1):
+        west = set_bit(x - i, west)
+
+    return [south, west, east, north]
+
+
+rayMasks = [generate_ray_masks(x) for x in range(0, 63)]
+
+def get_ray_masks(x):
+    return rayMasks[x]

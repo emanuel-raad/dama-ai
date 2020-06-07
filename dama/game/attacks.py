@@ -6,6 +6,8 @@ import numpy as np
 from bitOperations import *
 from bitboard import *
 
+from treelib import Node, Tree
+
 # Magic bitboards
 # ~~~~spooky
 
@@ -145,6 +147,327 @@ kingMagicLookup = load_lookup(os.path.join(base, "king_magic_lookup.pkl"), _gene
 pawnSingleMasks = load_lookup(os.path.join(base, "pawn_single.pkl")      , _generate_pawn_single_moves)
 pawnDoubleMasks = load_lookup(os.path.join(base, "pawn_double.pkl")      , _generate_pawn_jumps)
 
+def decompose_directions(pos, board):
+    masks = get_ray_masks(pos)
+    decomposed_board = []
+
+    for m in masks:
+        decomposed_board.append(board & m)
+
+    return decomposed_board
+
+class MoveNode(object):
+    '''
+    Class to store the representation of the game at each
+    node of the tree.
+
+    Contains the gameboard, the position of the piece that just moved
+
+    Tag is a string representation of the position
+    '''
+    def __init__(self, moveTo=None, capture=None):
+        self.moveTo = moveTo
+        self.capture = capture
+        self.tag = "({}, {})".format(moveTo, capture)
+
+    def is_empty(self):
+        return self.moveTo is None and self.capture is None
+
+
+def get_all_king_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode = None, moveTree = None):
+
+    if moveTree is None:        
+        moveTree = Tree()
+        parentMove = MoveNode()
+        parentNode = Node(tag = parentMove.tag, data=parentMove)
+        moveTree.add_node(parentNode)
+
+    attacks = get_king_attack(pos, board) & ~myPawn
+
+    # moveTree.show()
+    
+    if (attacks & oppBoard):
+        # Potentially an enemy being attacked. Let's run this again to make sure
+
+        # Remove the opp pieces that are being attacked
+        tempBoard = board & ~(attacks & oppBoard)
+
+        # Run again
+        attacks2 = get_king_attack(pos, tempBoard) & ~myPawn
+        landingSpots = attacks2 & ~attacks & ~oppBoard
+
+        # print_bitboard([ board, attacks, tempBoard, attacks2, landingSpots])
+
+        # Only sliding moves available
+        if landingSpots == 0 and canMove:
+            # return the sliding moves
+            print("Only sliding moves available")
+            # if hasnt jumped yet, return sliding moves
+            # else these moves arent valid
+            slide = get_active_indices(attacks & empty)
+            for i in slide:
+                child = MoveNode(i, None)
+                childNode = Node(tag=child.tag, data=child)
+                moveTree.add_node(childNode, parentNode)
+
+        else:
+            # print("Attacks available")
+            attack_dir = decompose_directions(pos, attacks & oppBoard)
+            landing_dir = decompose_directions(pos, landingSpots)
+
+            for a, l in zip(attack_dir, landing_dir):
+                potentialCapture = get_active_indices(a)
+
+                if len(potentialCapture) > 0:
+                    capture = potentialCapture[0]
+                    l_indices = get_active_indices(l)
+                    
+                    for land in l_indices:
+                        child = MoveNode(land, capture)
+                        childNode = Node(tag=child.tag, data=child)
+                        moveTree.add_node(childNode, parentNode)
+                        
+
+                        childBoard = board
+                        childOppBoard = oppBoard
+
+                        # Remove the captured piece
+                        childOppBoard = clear_bit(capture, childOppBoard)
+
+                        # Maybe there's a way to update the board
+                        # based on what oppBoard is. Instead of applying the
+                        # same operation twice?
+                        childBoard = clear_bit(capture, childBoard)
+
+                        # Move the king
+                        childBoard = move_piece(pos, land, childBoard)
+
+                        # print("Parent: {} and Child: {}".format(parentNode.tag, childNode.tag))
+                        # print_bitboard([ board, childBoard ])
+                        # print()
+
+                        get_all_king_moves(land, childBoard, myPawn, childOppBoard, canMove = False, parentNode = childNode, moveTree=moveTree)
+
+    else:
+        # End of branch
+        pass
+
+    return moveTree
+
+
+def get_all_pawn_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode = None, moveTree = None):
+
+    if moveTree is None:        
+        moveTree = Tree()
+        parentMove = MoveNode()
+        parentNode = Node(tag = parentMove.tag, data=parentMove)
+        moveTree.add_node(parentNode)
+
+    attacks = pawnSingleMasks[pos] & oppBoard
+
+    # moveTree.show()
+    
+    if (attacks):
+        # Potentially an enemy being attacked. Let's run this again to make sure
+
+        # Remove the opp pieces that are being attacked
+        tempBoard = board & ~(attacks)
+
+        # Run again
+        landingSpots = pawnDoubleMasks[pos] & ~board
+
+        # print_bitboard([ board, attacks, tempBoard, attacks2, landingSpots])
+
+        if landingSpots != 0:
+            # print("Attacks available")
+            attack_dir = decompose_directions(pos, attacks)
+            landing_dir = decompose_directions(pos, landingSpots)
+
+            for a, l in zip(attack_dir, landing_dir):
+                potentialCapture = get_active_indices(a)
+
+                if len(potentialCapture) > 0:
+                    capture = potentialCapture[0]
+                    l_indices = get_active_indices(l)
+                    
+                    for land in l_indices:
+                        child = MoveNode(land, capture)
+                        childNode = Node(tag=child.tag, data=child)
+                        moveTree.add_node(childNode, parentNode)
+                        
+                        childBoard = board
+                        childOppBoard = oppBoard
+
+                        # Remove the captured piece
+                        childOppBoard = clear_bit(capture, childOppBoard)
+
+                        # Maybe there's a way to update the board
+                        # based on what oppBoard is. Instead of applying the
+                        # same operation twice?
+                        childBoard = clear_bit(capture, childBoard)
+
+                        # Move the king
+                        childBoard = move_piece(pos, land, childBoard)
+
+                        # print("Parent: {} and Child: {}".format(parentNode.tag, childNode.tag))
+                        # print_bitboard([ board, childBoard ])
+                        # print()
+
+                        get_all_pawn_moves(land, childBoard, myPawn, childOppBoard, canMove = False, parentNode = childNode, moveTree=moveTree)
+
+    if attacks == 0 and canMove:
+        # print("No attacks")
+        potentialSlides = ~board & pawnSingleMasks[pos]
+
+        if potentialSlides != 0:
+            # return the sliding moves
+            # print("Only sliding moves available")
+
+            # if hasnt jumped yet, return sliding moves
+            # else these moves arent valid
+            slide = get_active_indices(potentialSlides)
+            for i in slide:
+                child = MoveNode(i, None)
+                childNode = Node(tag=child.tag, data=child)
+                moveTree.add_node(childNode, parentNode)
+        else:
+            # print("No moves available")
+            pass
+
+    return moveTree
+
 
 if __name__ == '__main__':
-    print_bitboard([ get_king_attack(get_rand_king_index(), get_rand_board()) ])
+    king = np.array([
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0]
+            ])
+    king = array2bit(king)
+
+    # Slides
+    # oppBoard = np.array([
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 1, 0, 1, 0, 1, 1, 0],
+    #             [1, 0, 0, 0, 0, 0, 0, 1],
+    #             [0, 0, 1, 0, 1, 0, 1, 0],
+    #             [1, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 1, 0, 1, 0, 1, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 1, 0],
+    #             [0, 1, 0, 1, 0, 1, 0, 0]
+    #         ])
+    # oppBoard = array2bit(oppBoard)
+
+    # Jumps
+    oppBoard = np.array([
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 1, 1, 0, 1, 1, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+            ])
+    oppBoard = array2bit(oppBoard)
+
+    # oppBoard = np.array([
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 0, 0, 0, 0, 0, 0],
+    #             [0, 0, 1, 0, 0, 0, 0, 0],
+    #             [0, 1, 0, 0, 0, 0, 0, 0],
+    #         ])
+    # oppBoard = array2bit(oppBoard)
+
+    myPawn = np.array([
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0],
+            ])
+    myPawn = array2bit(myPawn)
+
+
+    board = king | oppBoard | myPawn
+    empty = ~board
+    
+    import time
+    time1 = time.time()
+
+    # pos = get_active_indices(king)[0]
+    # moveTree = get_all_king_moves(pos, board, myPawn, oppBoard)
+
+    # time2 = time.time()
+    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
+
+    # # moveTree.show()
+    # # print(moveTree.depth())
+
+    # # Filter for only the longest branches
+    # lengths = [len(m) for m in moveTree.paths_to_leaves()]
+    # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+    # print("Number of computed paths : {}".format(len(lengths)))
+    # print("Number of valid paths    : {}".format(len(maxLengths)))
+
+    # ################################################
+    # PAWN
+
+    # pos = get_active_indices(myPawn)[0]
+    # moveTree = get_all_pawn_moves(pos, board, myPawn, oppBoard)
+
+    # time2 = time.time()
+    # print("Completed in {:.4f} ms".format(1000*(time2-time1)))
+
+    # moveTree.show()
+    # # print(moveTree.depth())
+
+    # # Filter for only the longest branches
+    # lengths = [len(m) for m in moveTree.paths_to_leaves()]
+    # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+    # print("Number of computed paths : {}".format(len(lengths)))
+    # print("Number of valid paths    : {}".format(len(maxLengths)))
+
+    # ################################################
+    # Starting board moves
+
+    oppPawn = initialize_board([5, 6])
+    myPawn = initialize_board([1, 2])
+    board = oppPawn | myPawn
+
+    time1 = time.time()
+
+    for pos in get_active_indices(myPawn):
+        moveTree = get_all_pawn_moves(pos, board, myPawn, oppPawn)
+        # moveTree.show()
+        # print(moveTree.depth())
+
+        # Filter for only the longest branches
+        # lengths = [len(m) for m in moveTree.paths_to_leaves()]
+        # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+        # print("Number of computed paths : {}".format(len(lengths)))
+        # print("Number of valid paths    : {}".format(len(maxLengths)))
+
+    time2 = time.time()
+    print("Completed in {:.4f} ms".format(1000*(time2-time1)))
+
+    # To speed up computation for the game move generation:
+    # if get_all_pawn_moves returns a jump, then call get_all_king_moves(canMove=False)
+    # to ignore the sliding move generation. They will be pruned out anyway since there is a mandatory
+    # pawn jump, so might as well ignore them. 
+    # 
+    # Also calculate the pawn moves first since skipping the evaluating the 
+    # king slides would be time consuming. Or maybe since there are more pawns it'll take more
+    # time? Idk should experiment with it

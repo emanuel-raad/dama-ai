@@ -17,6 +17,7 @@ class Move:
     capturedPositions : List[np.ndarray]
     
     # This is a list of dama.game.constants.Piece
+    # I forget what this is for?
     capturedTypes : List[Pieces]
 
     # The player whose turn it is

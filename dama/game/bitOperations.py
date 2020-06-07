@@ -2,7 +2,6 @@ import pickle
 import warnings
 
 import numpy as np
-from aenum import Enum
 
 warnings.filterwarnings("ignore", message='overflow')
 
@@ -156,3 +155,12 @@ def bitScanForward(bb):
    if bb == 0:
        return 0
    return index64[((bb ^ (bb-np.uint64(1))) * debruijn64) >> np.uint64(58)]
+
+def set_bit(n, bit):
+    return bit | (np.uint64(1) << np.uint64(n))
+
+def clear_bit(n, bit):
+    return bit & (~(np.uint64(1) << np.uint64(n)))
+
+def toggle_bit(n, bit):
+    return bit ^ (np.uint64(1) << np.uint64(n))
