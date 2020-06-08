@@ -9,6 +9,8 @@ from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps,
 
 from treelib import Node, Tree
 
+from enum import Enum
+
 # Magic bitboards
 # ~~~~spooky
 
@@ -157,19 +159,35 @@ def decompose_directions(pos, board):
 
     return decomposed_board
 
+class MoveTypes(Enum):
+    QUIET = 'Quiet'
+    JUMP = 'Jump'
+    START = 'Start'
+
 class MoveNode(object):
-    '''
-    Class to store the representation of the game at each
-    node of the tree.
+    """Class to represent a move
+    """
+    def __init__(self, moveFrom, moveTo=None, capture=None, moveType=None, promotion=False):
+        """Initialize a move
 
-    Contains the gameboard, the position of the piece that just moved
+        Args:
+            moveFrom (np.uint64, optional): Starting position, indexed from 0-63. Defaults to None.
+            moveTo (np.uint64, optional): End position, indexed from 0-63. Defaults to None.
+            capture (np.uint64, optional): Enemy square being captured, indexed from 0-63. Defaults to None.
+            moveType (MoveTypes, optional): Indicates whether move is jump or quiet. Defaults to None.
+            promotion (bool, optional): True if piece get promoted at moveTo location. Defaults to False.
+        """
+        self.moveFrom  = moveFrom
+        self.moveTo    = moveTo
+        self.capture   = capture
+        self.moveType  = moveType
+        self.promotion = promotion
 
-    Tag is a string representation of the position
-    '''
-    def __init__(self, moveTo=None, capture=None):
-        self.moveTo = moveTo
-        self.capture = capture
-        self.tag = "({}, {})".format(moveTo, capture)
+        # self.tag = "(From:{} To:{} Capture:{})".format(self.moveFrom, self.moveTo, self.capture)
+
+
+
+        self.tag = "(F:{} T:{} C:{})".format(self.moveFrom, self.moveTo, self.capture)
 
     def is_empty(self):
         return self.moveTo is None and self.capture is None
@@ -254,7 +272,6 @@ def get_all_king_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
         pass
 
     return moveTree
-
 
 # To speed up computation for the game move generation:
 # if get_all_pawn_moves returns a jump, then call get_all_king_moves(canMove=False)
@@ -345,17 +362,17 @@ def get_all_pawn_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
 
     return moveTree
 
-
-
 def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = True, parentNode = None, moveTree = None):
 
     # Initialize the move tree
-    if moveTree is None and parentNode is None:        
+    if moveTree is None and parentNode is None:
         moveTree = Tree()
-        parentMove = MoveNode(moveTo=pos)
+        parentMove = MoveNode(moveFrom=pos, moveType=MoveTypes.START)
         parentNode = Node(tag=parentMove.tag, data=parentMove)
         moveTree.add_node(parentNode)
 
+    # Could also only evaluate 1 of them. If there's a collision on the boards
+    # then I've got a bigger problem
     isKing = is_piece_present(pos, myKing)
     isPawn = is_piece_present(pos, myPawn)
 
@@ -387,7 +404,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             # print("Only king sliding moves available")
             slide = get_active_indices(get_king_attack(pos, board) & ~board)
             for i in slide:
-                child = MoveNode(i, None)
+                child = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=False)
                 childNode = Node(tag=child.tag, data=child)
                 moveTree.add_node(childNode, parentNode)
 
@@ -404,9 +421,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                     l_indices = get_active_indices(l)
                     
                     for land in l_indices:
-                        child = MoveNode(land, capture)
-                        childNode = Node(tag=child.tag, data=child)
-                        moveTree.add_node(childNode, parent=parentNode)
+                        child = MoveNode(moveFrom=pos, moveTo=land, capture=capture, moveType=MoveTypes.JUMP, promotion=False)
                         
                         childBoard = board
                         childOppBoard = oppBoard
@@ -427,8 +442,12 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                         isPromoted, promotePos = check_promotions(childMyPawn)
                         if isPromoted:
                             # print("PROMOTED")
+                            child.promotion = True
                             childMyPawn, childMyKing = promote(promotePos, childMyPawn, childMyKing)
                             # the board overall doesn't change so no need to update
+
+                        childNode = Node(tag=child.tag, data=child)
+                        moveTree.add_node(childNode, parent=parentNode)
 
                         get_all_generalized_moves(
                             land, childBoard, childMyPawn, childMyKing, childOppBoard,
@@ -444,157 +463,141 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             slide = get_active_indices(attacks & ~board)
 
         for i in slide:
-            childMove = MoveNode(i, None)
+            childMove = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=False)
             childNode = Node(tag=childMove.tag, data=childMove)
             moveTree.add_node(childNode, parent=parentNode)
 
     return moveTree
 
 
+def evaluateValid(boardClass:BoardParent):
+    time1 = time.time()
+
+    moveTreeListP = []
+    moveTreeListK = []
+
+    for posP in get_active_indices(boardClass.myPawn):
+        moveTreeListP.append(
+            get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+        )
+
+    for posK in get_active_indices(boardClass.myKing):
+        moveTreeListK.append(
+            get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+        )
+
+    # I think the best approach would be to merge everything into one tree
+    # and then keep only the longest branches of that tree
+    # Then check if any of the branches contain a jump, if they do,
+    # remove all the non-jump branches
+    # This case arrises when there is one jump possible and one slide possible
+    # They both have a depth of 1
+
+    tree = Tree()
+    rootMove = MoveNode(moveFrom=None, moveTo=None, moveType=MoveTypes.START)
+    rootNode = Node(tag=rootMove.tag, data=rootMove)
+    tree.add_node(rootNode)
+    
+    for treelist in [moveTreeListP, moveTreeListK]:
+        for movetree in treelist:
+            tree.paste(rootNode.identifier, movetree)
+
+    return tree
+
+def getValidBranch(tree):
+    paths = tree.paths_to_leaves()
+    maxDepth = tree.depth() + 1
+
+    validMoves = []
+    isJumpPresent = False
+
+    for path in paths:
+        if len(path) == maxDepth:
+            temp = []
+            for id in path:
+                temp.append(tree.get_node(id).data)
+            
+            if tree.get_node(path[-1]).data.capture is not None:
+                isJumpPresent = True
+
+            validMoves.append(temp)
+    
+    movesToRemove = []
+    for i in range(len(validMoves)):
+        move = validMoves[i]
+        if move[-1].capture is None and isJumpPresent:
+            movesToRemove.append(i)
+
+    for i in sorted(movesToRemove, reverse = True):  
+        del validMoves[i] 
+
+    return validMoves
+
+
+def getValidBranch2(tree):
+    # Prune the tree to keep the longest branches
+    
+    def remove_nodes_list(t, remove):
+        for nodeID in remove:
+            if t.contains(nodeID):
+                t.remove_node(nodeID)
+
+    maxDepth = tree.depth()
+
+    nodesToRemove = []
+
+    containsJump = False
+
+    for leaf in tree.leaves():
+        for nodeID in tree.rsearch(leaf.identifier):
+            # print(tree.get_node(nodeID).tag)
+
+            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []) or (tree.depth(nodeID) == 1 and tree.children(nodeID) == []):
+                # print("\tPRUNE: {}".format(tree.get_node(nodeID).tag))
+                nodesToRemove.append(nodeID)
+
+            if maxDepth == 2 and tree.get_node(nodeID).data.moveType == MoveTypes.JUMP:
+                containsJump = True
+            # print()
+
+
+    remove_nodes_list(tree, nodesToRemove)
+
+    # If depth is 2, then iterate thru the tree to see if there is a jump
+    # If yes, then remove the quiet moves
+    nodesToRemove = []
+    if containsJump:
+        for leaf in tree.leaves():
+            for nodeID in tree.rsearch(leaf.identifier):
+                if tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
+                    nodesToRemove.append(nodeID)
+                    nodesToRemove.append(tree.parent(nodeID).identifier)
+    
+    remove_nodes_list(tree, nodesToRemove)
+
+    # This is to remove the moves that used to have children, but now don't
+    # Example: for the PawnJumps board.
+    # There must be a better way to prune :/
+    nodesToRemove = []
+    for leaf in tree.leaves():
+        for nodeID in tree.rsearch(leaf.identifier):
+            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []):
+                nodesToRemove.append(nodeID)
+    
+    remove_nodes_list(tree, nodesToRemove)
+
+    return tree
+
 if __name__ == '__main__':
     import time
 
     # ################################################
-    # Generalized Routine
-
-    def evaluate(boardClass:BoardParent, printTree=True, printPaths=True):
-        time1 = time.time()
-
-        moveTreeListP = []
-        moveTreeListK = []
-
-        for posP in get_active_indices(boardClass.myPawn):
-            moveTreeListP.append(
-                get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
-            )
-
-        for posK in get_active_indices(boardClass.myKing):
-            moveTreeListK.append(
-                get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
-            )
-
-        time2 = time.time()
-        print("Completed {} in {:.4f} ms".format(boardClass.__name__, 1000*(time2-time1)))
-
-        if printTree or printPaths:
-            pseudoPathCount = 0
-            validPathCount = 0
-
-            for m in moveTreeListP:
-                if printTree: m.show()
-                if printPaths:
-                    lengths = [len(x) for x in m.paths_to_leaves()]
-                    maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-                    pseudoPathCount += len(lengths)
-                    validPathCount += len(maxLengths)
-
-            for m in moveTreeListK:
-                if printTree: m.show()
-                if printPaths:
-                    lengths = [len(x) for x in m.paths_to_leaves()]
-                    maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-                    pseudoPathCount += len(lengths)
-                    validPathCount += len(maxLengths)
-
-            if printPaths:
-                print("Number of computed paths : {}".format(len(lengths)))
-                print("Number of valid paths    : {}".format(len(maxLengths)))
-                print()
+    # Evaluate the Generalized Routine
 
 
-    def evaluateValid(boardClass:BoardParent):
-        time1 = time.time()
 
-        moveTreeListP = []
-        moveTreeListK = []
-
-
-        for posP in get_active_indices(boardClass.myPawn):
-            moveTreeListP.append(
-                get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
-            )
-
-        for posK in get_active_indices(boardClass.myKing):
-            moveTreeListK.append(
-                get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
-            )
-
-        # I think the best approach would be to merge everything into one tree
-        # and then keep only the longest branches of that tree
-        # Then check if any of the branches contain a jump, if they do,
-        # remove all the non-jump branches
-        # This case arrises when there is one jump possible and one slide possible
-        # They both have a depth of 1
-
-        tree = Tree()
-        rootMove = MoveNode()
-        rootNode = Node(tag=rootMove.tag, data=rootMove)
-        tree.add_node(rootNode)
-        
-        for treelist in [moveTreeListP, moveTreeListK]:
-            for movetree in treelist:
-                tree.paste(rootNode.identifier, movetree)
-
-        return tree
-
-    def getValidBranch(tree):
-
-        paths = tree.paths_to_leaves()
-        maxDepth = tree.depth() + 1
-
-        validMoves = []
-        isJumpPresent = False
-
-        for path in paths:
-            if len(path) == maxDepth:
-                temp = []
-                for id in path:
-                    temp.append(tree.get_node(id).data)
-                
-                if tree.get_node(path[-1]).data.capture is not None:
-                    isJumpPresent = True
-
-                validMoves.append(temp)
-        
-        movesToRemove = []
-        for i in range(len(validMoves)):
-            move = validMoves[i]
-            if move[-1].capture is None and isJumpPresent:
-                movesToRemove.append(i)
-
-        for i in sorted(movesToRemove, reverse = True):  
-           del validMoves[i] 
-
-        return validMoves
-
-        # # This is a list of the longest moves
-        # validFromEachTree = []
-
-        # for treelist in [moveTreeListP, moveTreeListK]:
-        #     for movetree in treelist:
-        #         moves = movetree.paths_to_leaves()
-        #         lengths = [len(x) for x in moves]
-        #         maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-        #         for i in maxLengths:
-        #             validFromEachTree.append(moves[i])
-
-        # validMoves = []
-        # lengths = [len(x) for x in validFromEachTree]
-        # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
-        # for i in maxLengths:
-        #     validMoves.append(validFromEachTree[i])
-
-        # return validMoves
-
-
-    # evaluate(StartingBoard, printTree=False)
-    # evaluate(PawnJumps, printTree=False)
-    # evaluate(KingJumps, printTree=False)
-    # evaluate(KingZigzag, printTree=False)
-    # evaluate(PawnPromote, printTree=False)
-    # evaluate(StartingAndJump, printTree=False, printPaths=True)
-
-    boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
+    # boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
+    boards = [StartingAndJump]
 
     for b in boards:
         print(b.__name__)
@@ -605,10 +608,15 @@ if __name__ == '__main__':
         validMoves = getValidBranch(tree)
         time3 = time.time()
 
+        tree2 = getValidBranch2(Tree(tree.subtree(tree.root), deep=True))
+
         print("Retrieved the tree in: {}us".format(1000000*(time2-time1)))
         print("Validated the tree in: {}us".format(1000000*(time3-time2)))
         print()
-        # tree.show()
+
+        tree.show()
+        print()
+        tree2.show()
         
         # print()
 
