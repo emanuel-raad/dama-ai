@@ -5,7 +5,7 @@ import numpy as np
 
 from bitOperations import *
 from bitboard import *
-from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag, PawnPromote
+from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag, PawnPromote, StartingAndJump, SingleMove
 
 from treelib import Node, Tree
 
@@ -463,7 +463,6 @@ if __name__ == '__main__':
         moveTreeListP = []
         moveTreeListK = []
 
-
         for posP in get_active_indices(boardClass.myPawn):
             moveTreeListP.append(
                 get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
@@ -502,8 +501,119 @@ if __name__ == '__main__':
                 print("Number of valid paths    : {}".format(len(maxLengths)))
                 print()
 
-    evaluate(StartingBoard, printTree=False)
-    evaluate(PawnJumps, printTree=False)
-    evaluate(KingJumps, printTree=False)
-    evaluate(KingZigzag, printTree=False)
-    evaluate(PawnPromote, printTree=False)
+
+    def evaluateValid(boardClass:BoardParent):
+        time1 = time.time()
+
+        moveTreeListP = []
+        moveTreeListK = []
+
+
+        for posP in get_active_indices(boardClass.myPawn):
+            moveTreeListP.append(
+                get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+            )
+
+        for posK in get_active_indices(boardClass.myKing):
+            moveTreeListK.append(
+                get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+            )
+
+        # I think the best approach would be to merge everything into one tree
+        # and then keep only the longest branches of that tree
+        # Then check if any of the branches contain a jump, if they do,
+        # remove all the non-jump branches
+        # This case arrises when there is one jump possible and one slide possible
+        # They both have a depth of 1
+
+        tree = Tree()
+        rootMove = MoveNode()
+        rootNode = Node(tag=rootMove.tag, data=rootMove)
+        tree.add_node(rootNode)
+        
+        for treelist in [moveTreeListP, moveTreeListK]:
+            for movetree in treelist:
+                tree.paste(rootNode.identifier, movetree)
+
+        return tree
+
+    def getValidBranch(tree):
+
+        paths = tree.paths_to_leaves()
+        maxDepth = tree.depth() + 1
+
+        validMoves = []
+        isJumpPresent = False
+
+        for path in paths:
+            if len(path) == maxDepth:
+                temp = []
+                for id in path:
+                    temp.append(tree.get_node(id).data)
+                
+                if tree.get_node(path[-1]).data.capture is not None:
+                    isJumpPresent = True
+
+                validMoves.append(temp)
+        
+        movesToRemove = []
+        for i in range(len(validMoves)):
+            move = validMoves[i]
+            if move[-1].capture is None and isJumpPresent:
+                movesToRemove.append(i)
+
+        for i in sorted(movesToRemove, reverse = True):  
+           del validMoves[i] 
+
+        return validMoves
+
+        # # This is a list of the longest moves
+        # validFromEachTree = []
+
+        # for treelist in [moveTreeListP, moveTreeListK]:
+        #     for movetree in treelist:
+        #         moves = movetree.paths_to_leaves()
+        #         lengths = [len(x) for x in moves]
+        #         maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+        #         for i in maxLengths:
+        #             validFromEachTree.append(moves[i])
+
+        # validMoves = []
+        # lengths = [len(x) for x in validFromEachTree]
+        # maxLengths = np.argwhere(lengths == np.amax(lengths)).flatten()
+        # for i in maxLengths:
+        #     validMoves.append(validFromEachTree[i])
+
+        # return validMoves
+
+
+    # evaluate(StartingBoard, printTree=False)
+    # evaluate(PawnJumps, printTree=False)
+    # evaluate(KingJumps, printTree=False)
+    # evaluate(KingZigzag, printTree=False)
+    # evaluate(PawnPromote, printTree=False)
+    # evaluate(StartingAndJump, printTree=False, printPaths=True)
+
+    boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
+
+    for b in boards:
+        print(b.__name__)
+        
+        time1 = time.time()
+        tree = evaluateValid(b)
+        time2 = time.time()
+        validMoves = getValidBranch(tree)
+        time3 = time.time()
+
+        print("Retrieved the tree in: {}us".format(1000000*(time2-time1)))
+        print("Validated the tree in: {}us".format(1000000*(time3-time2)))
+        print()
+        # tree.show()
+        
+        # print()
+
+        # print("valid moves")
+        # for v in validMoves:
+        #     for m in v:
+        #         print(m.tag)
+        #     print()

@@ -190,7 +190,7 @@ def generate_ray_masks(x):
     return [south, west, east, north]
 
 
-rayMasks = [generate_ray_masks(x) for x in range(0, 63)]
+rayMasks = [generate_ray_masks(x) for x in range(0, 64)]
 
 def get_ray_masks(x):
     return rayMasks[x]
