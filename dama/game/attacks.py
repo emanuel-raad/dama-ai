@@ -6,6 +6,7 @@ import numpy as np
 from bitOperations import *
 from bitboard import *
 from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag, PawnPromote, StartingAndJump, SingleMove
+from move import MoveNode, MoveTypes
 
 from treelib import Node, Tree
 
@@ -158,39 +159,6 @@ def decompose_directions(pos, board):
         decomposed_board.append(board & m)
 
     return decomposed_board
-
-class MoveTypes(Enum):
-    QUIET = 'Quiet'
-    JUMP = 'Jump'
-    START = 'Start'
-
-class MoveNode(object):
-    """Class to represent a move
-    """
-    def __init__(self, moveFrom, moveTo=None, capture=None, moveType=None, promotion=False):
-        """Initialize a move
-
-        Args:
-            moveFrom (np.uint64, optional): Starting position, indexed from 0-63. Defaults to None.
-            moveTo (np.uint64, optional): End position, indexed from 0-63. Defaults to None.
-            capture (np.uint64, optional): Enemy square being captured, indexed from 0-63. Defaults to None.
-            moveType (MoveTypes, optional): Indicates whether move is jump or quiet. Defaults to None.
-            promotion (bool, optional): True if piece get promoted at moveTo location. Defaults to False.
-        """
-        self.moveFrom  = moveFrom
-        self.moveTo    = moveTo
-        self.capture   = capture
-        self.moveType  = moveType
-        self.promotion = promotion
-
-        # self.tag = "(From:{} To:{} Capture:{})".format(self.moveFrom, self.moveTo, self.capture)
-
-
-
-        self.tag = "(F:{} T:{} C:{})".format(self.moveFrom, self.moveTo, self.capture)
-
-    def is_empty(self):
-        return self.moveTo is None and self.capture is None
 
 
 def get_all_king_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode = None, moveTree = None):
@@ -470,9 +438,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
     return moveTree
 
 
-def evaluateValid(boardClass:BoardParent):
-    time1 = time.time()
-
+def evaluate(boardClass:BoardParent):
     moveTreeListP = []
     moveTreeListK = []
 
@@ -505,36 +471,6 @@ def evaluateValid(boardClass:BoardParent):
     return tree
 
 def getValidBranch(tree):
-    paths = tree.paths_to_leaves()
-    maxDepth = tree.depth() + 1
-
-    validMoves = []
-    isJumpPresent = False
-
-    for path in paths:
-        if len(path) == maxDepth:
-            temp = []
-            for id in path:
-                temp.append(tree.get_node(id).data)
-            
-            if tree.get_node(path[-1]).data.capture is not None:
-                isJumpPresent = True
-
-            validMoves.append(temp)
-    
-    movesToRemove = []
-    for i in range(len(validMoves)):
-        move = validMoves[i]
-        if move[-1].capture is None and isJumpPresent:
-            movesToRemove.append(i)
-
-    for i in sorted(movesToRemove, reverse = True):  
-        del validMoves[i] 
-
-    return validMoves
-
-
-def getValidBranch2(tree):
     # Prune the tree to keep the longest branches
     
     def remove_nodes_list(t, remove):
@@ -559,7 +495,6 @@ def getValidBranch2(tree):
             if maxDepth == 2 and tree.get_node(nodeID).data.moveType == MoveTypes.JUMP:
                 containsJump = True
             # print()
-
 
     remove_nodes_list(tree, nodesToRemove)
 
@@ -588,40 +523,47 @@ def getValidBranch2(tree):
 
     return tree
 
+def listFromTree(tree):
+    moveList = [path[2:] for path in tree.paths_to_leaves()]
+    for i in range(0, len(moveList)):
+        for j in range(0, len(moveList[i])):
+            moveList[i][j] = tree.get_node(moveList[i][j]).data
+    return moveList
+
 if __name__ == '__main__':
     import time
 
     # ################################################
     # Evaluate the Generalized Routine
 
-
-
-    # boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
-    boards = [StartingAndJump]
+    boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
+    # boards = [StartingBoard]
 
     for b in boards:
         print(b.__name__)
         
         time1 = time.time()
-        tree = evaluateValid(b)
+        tree = evaluate(b)
         time2 = time.time()
-        validMoves = getValidBranch(tree)
+        # tree2 = getValidBranch(Tree(tree.subtree(tree.root), deep=True))
+        getValidBranch(tree)
         time3 = time.time()
 
-        tree2 = getValidBranch2(Tree(tree.subtree(tree.root), deep=True))
 
-        print("Retrieved the tree in: {}us".format(1000000*(time2-time1)))
-        print("Validated the tree in: {}us".format(1000000*(time3-time2)))
-        print()
-
-        tree.show()
-        print()
-        tree2.show()
-        
+        # tree.show()
         # print()
 
-        # print("valid moves")
-        # for v in validMoves:
-        #     for m in v:
-        #         print(m.tag)
+        print("Generated the tree in: {}us".format(1000000*(time2-time1)))
+        print("Validated the tree in: {}us".format(1000000*(time3-time2)))
+
+        moveList = listFromTree(tree)
+
+        time4 = time.time()
+        moveList2 = listFromTree(getValidBranch(evaluate(b)))
+        time5 = time.time()
+        print("Did everything in : {}us".format(1000000*(time5-time4)))
+
+        # for move in moveList:
+        #     myPawn1, myKing1, oppPawn1, oppKing1 = perform_move(move, b.myPawn, b.myKing, b.oppPawn, b.oppKing)
+        #     print_bitboard([ myPawn1, myKing1, oppPawn1, oppKing1 ])
         #     print()

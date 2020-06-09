@@ -3,7 +3,8 @@ import struct
 import numpy as np
 from multipledispatch import dispatch
 
-from bitOperations import clear_bit, set_bit
+from bitOperations import clear_bit, set_bit, toggle_bit
+from move import MoveNode, MoveTypes
 
 u64high = np.uint64(0xffffffffffffffff)
 
@@ -211,3 +212,22 @@ def check_promotions(myPawn):
             return True, indices[0]
     else:
         return False, 0
+
+def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
+    myBoards = [myPawn, myKing]
+    oppBoards = [oppPawn, oppKing]
+    
+    for move in moveList:
+        for i in range(0, len(myBoards)):
+            if is_piece_present(move.moveFrom, myBoards[i]):
+                myBoards[i] = toggle_bit(move.moveFrom, myBoards[i])
+                myBoards[i] = toggle_bit(move.moveTo, myBoards[i])
+        if move.capture is not None:
+            for i in range(0, len(oppBoards)):
+                if is_piece_present(move.capture, oppBoards[i]):
+                    oppBoards[i] = toggle_bit(move.capture, oppBoards[i])
+        if move.promotion == True:
+            myBoards[0], myBoards[1] = promote(move.moveTo, myBoards[0], myBoards[0])
+    
+    return myBoards[0], myBoards[1], oppBoards[0], oppBoards[1]
+        
