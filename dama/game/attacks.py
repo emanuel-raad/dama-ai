@@ -5,7 +5,7 @@ import numpy as np
 
 from bitOperations import *
 from bitboard import *
-from bitboard_constants import BoardParent, StartingBoard, PawnJumps, KingJumps, KingZigzag, PawnPromote, StartingAndJump, SingleMove
+from bitboard_constants import *
 from move import MoveNode, MoveTypes
 
 from treelib import Node, Tree
@@ -330,7 +330,7 @@ def get_all_pawn_moves(pos, board, myPawn, oppBoard, canMove = True, parentNode 
 
     return moveTree
 
-def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = True, parentNode = None, moveTree = None):
+def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = True, parentNode = None, moveTree = None, evaluator=None):
 
     # Initialize the move tree
     if moveTree is None and parentNode is None:
@@ -338,6 +338,8 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
         parentMove = MoveNode(moveFrom=pos, moveType=MoveTypes.START)
         parentNode = Node(tag=parentMove.tag, data=parentMove)
         moveTree.add_node(parentNode)
+    if evaluator is None:
+        evaluator = Evaluator()
 
     # Could also only evaluate 1 of them. If there's a collision on the boards
     # then I've got a bigger problem
@@ -367,8 +369,8 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             landingSpots = get_king_attack(pos, tempBoard) & ~firstAttackQuery & ~board
 
         # The case where the attack wasn't valid, but the king can still move
-        # Only kings are every going to reach this point of the logic
-        if landingSpots == 0 and canMove:
+        # Only kings are ever going to reach this point of the logic
+        if landingSpots == 0 and canMove and not evaluator.hasEverJumped:
             # print("Only king sliding moves available")
             slide = get_active_indices(get_king_attack(pos, board) & ~board)
             for i in slide:
@@ -389,6 +391,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                     l_indices = get_active_indices(l)
                     
                     for land in l_indices:
+                        evaluator.jumped()
                         child = MoveNode(moveFrom=pos, moveTo=land, capture=capture, moveType=MoveTypes.JUMP, promotion=False)
                         
                         childBoard = board
@@ -419,12 +422,11 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
 
                         get_all_generalized_moves(
                             land, childBoard, childMyPawn, childMyKing, childOppBoard,
-                            canMove = False, parentNode = childNode, moveTree=moveTree
+                            canMove = False, parentNode = childNode, moveTree=moveTree, evaluator=evaluator
                         )
 
-    elif attacks == 0 and canMove:
+    elif attacks == 0 and canMove and not evaluator.hasEverJumped:
         # No attacks availalbe, can only move
-        slide = np.uint64(0)
         if is_piece_present(pos, myPawn):
             slide = get_active_indices(pawnSingleMasks[pos] & ~board)
         elif is_piece_present(pos, myKing):
@@ -437,36 +439,79 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
 
     return moveTree
 
+class Evaluator:
+    def __init__(self):
+        self.hasJumped = False
+        self.hasEverJumped = False
+        self.depthTracker = []
+        self.jumpTracker = []
+    def jumped(self):
+        self.hasJumped = True
+        self.hasEverJumped = True
+    def resetJump(self):
+        self.hasJumped = False
+    def trackDepth(self, depth):
+        self.depthTracker.append(depth)
+    def trackJump(self, hasJumped):
+        self.jumpTracker.append(hasJumped)
 
 def evaluate(boardClass:BoardParent):
-    moveTreeListP = []
-    moveTreeListK = []
+    moveTreeList = []
+    evaluator = Evaluator()
+    maxDepth = 0
 
-    for posP in get_active_indices(boardClass.myPawn):
-        moveTreeListP.append(
-            get_all_generalized_moves(posP, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
+    indices = get_active_indices(boardClass.myPawn)
+    indices.extend(get_active_indices(boardClass.myKing))
+
+    # Could split indices into equally sized lists and run threaded
+
+    for pos in indices:
+        tree = get_all_generalized_moves(
+            pos, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard, evaluator=evaluator
         )
 
-    for posK in get_active_indices(boardClass.myKing):
-        moveTreeListK.append(
-            get_all_generalized_moves(posK, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard)
-        )
+        currentDepth = tree.depth()
 
-    # I think the best approach would be to merge everything into one tree
-    # and then keep only the longest branches of that tree
-    # Then check if any of the branches contain a jump, if they do,
-    # remove all the non-jump branches
-    # This case arrises when there is one jump possible and one slide possible
-    # They both have a depth of 1
+        if currentDepth >= maxDepth:
+            maxDepth = currentDepth
+            moveTreeList.append(tree)
+            
+            # Only track the moves that get appended
+            evaluator.trackJump(evaluator.hasJumped)
+            evaluator.trackDepth(currentDepth)
+        
+        # Reset all the time between pieces
+        evaluator.resetJump()
+
+
+    # A lot of the pruning can be simplified by expanding on the evaluator class
+    # Should keep track if each tree has jumped AND the depth of each tree
+    # 
+    # If any tree jumped, remove the ones that didn't
+    # 
+    # For every short tree added before the longest one, delete the short ones
+    # 
+    # Finally combine them all in one big tree
+
+    m = max(evaluator.depthTracker)
+    remove = sorted([i for i, j in enumerate(evaluator.depthTracker) if j!=m], reverse=True)
+
+    for i in remove:
+        del moveTreeList[i]
+        del evaluator.jumpTracker[i]
+    
+    if evaluator.hasEverJumped:
+        remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False])
+        for i in remove:
+            del moveTreeList[i]
 
     tree = Tree()
     rootMove = MoveNode(moveFrom=None, moveTo=None, moveType=MoveTypes.START)
     rootNode = Node(tag=rootMove.tag, data=rootMove)
     tree.add_node(rootNode)
     
-    for treelist in [moveTreeListP, moveTreeListK]:
-        for movetree in treelist:
-            tree.paste(rootNode.identifier, movetree)
+    for movetree in moveTreeList:
+        tree.paste(rootNode.identifier, movetree)
 
     return tree
 
@@ -536,34 +581,48 @@ if __name__ == '__main__':
     # ################################################
     # Evaluate the Generalized Routine
 
-    boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote, StartingAndJump, SingleMove]
-    # boards = [StartingBoard]
+    # boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote]
+    boards = [StartingBoard]
 
     for b in boards:
-        print(b.__name__)
+        print(b.tag)
         
         time1 = time.time()
         tree = evaluate(b)
         time2 = time.time()
-        # tree2 = getValidBranch(Tree(tree.subtree(tree.root), deep=True))
         getValidBranch(tree)
+        moveList = listFromTree(tree)
         time3 = time.time()
-
-
-        # tree.show()
-        # print()
 
         print("Generated the tree in: {}us".format(1000000*(time2-time1)))
         print("Validated the tree in: {}us".format(1000000*(time3-time2)))
+        print()
 
-        moveList = listFromTree(tree)
-
-        time4 = time.time()
-        moveList2 = listFromTree(getValidBranch(evaluate(b)))
-        time5 = time.time()
-        print("Did everything in : {}us".format(1000000*(time5-time4)))
+        # tree.show()
 
         # for move in moveList:
         #     myPawn1, myKing1, oppPawn1, oppKing1 = perform_move(move, b.myPawn, b.myKing, b.oppPawn, b.oppKing)
         #     print_bitboard([ myPawn1, myKing1, oppPawn1, oppKing1 ])
         #     print()
+
+    def timethis(n, board):
+        """ Returns the individual time for each run in ms
+        """
+        cumTime = 0
+        for i in range(0, n):
+            time1 = time.time()
+            getValidBranch(evaluate(board))
+            time2 = time.time()
+            cumTime += (time2 - time1)
+        
+        cumTime *= 1000
+        
+        return cumTime / n
+
+    print(timethis(10, KingZigzag))
+
+    # Starting board ~1.3ms
+    # Pawn promote ~0.7ms
+    # King jumps ~0.9ms
+    # Pawn jumps ~0.7ms
+    # King zigzag ~

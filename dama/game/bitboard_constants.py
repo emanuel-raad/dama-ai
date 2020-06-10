@@ -1,215 +1,89 @@
-from dataclasses import dataclass
-
 import numpy as np
 
-from bitboard import array2bit, initialize_board
+from bitboard import array2bit, initialize_board, numpyboard2bitboard
 
-
-@dataclass
 class BoardParent:
-    myPawn   : np.uint64
-    myKing   : np.uint64
-    oppPawn  : np.uint64
-    oppKing  : np.uint64
-    board    : np.uint64
-    oppBoard : np.uint64
+    def __init__(self, npBoard, tag=''):
+        self.tag = tag
+        self.myPawn, self.myKing, self.oppPawn, self.oppKing = numpyboard2bitboard(npBoard)
+        self.myBoard = self.myPawn | self.myKing
+        self.oppBoard = self.oppPawn | self.oppKing
+        self.board = self.myBoard | self.oppBoard
 
+StartingBoard = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [3, 3, 3, 3, 3, 3, 3, 3],
+            [3, 3, 3, 3, 3, 3, 3, 3],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0]    
+    ]), 'Starting Board'
+)
 
-@dataclass
-class StartingBoard(BoardParent):
-    myPawn = initialize_board([1, 2])
-    oppPawn = initialize_board([5, 6])
-    myKing = np.uint64(0)
-    oppKing = np.uint64(0)
+PawnJumps = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 3, 0, 1, 0, 0],
+            [3, 0, 0, 0, 3, 0, 0, 0],
+            [1, 3, 0, 3, 0, 3, 0, 3],
+            [3, 0, 0, 0, 3, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0]    
+    ]), 'Pawn Jumps'
+)
 
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
+KingJumps = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 3, 0, 2, 3, 0, 3, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0]    
+    ]), 'King Jumps'
+)
 
-@dataclass
-class PawnJumps(BoardParent):
-    myPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 1, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
+KingZigzag = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 3, 0, 3, 0, 3, 3, 0],
+            [3, 0, 0, 0, 0, 0, 0, 3],
+            [0, 0, 3, 0, 3, 0, 3, 0],
+            [3, 0, 0, 0, 0, 0, 0, 0],
+            [0, 3, 0, 3, 0, 3, 0, 0],
+            [0, 0, 0, 0, 0, 0, 3, 0],
+            [2, 3, 0, 3, 0, 3, 0, 0]
+    ]), 'King Zigzag'
+)
 
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [1, 0, 0, 0, 1, 0, 0, 0],
-                [0, 1, 0, 1, 0, 1, 0, 1],
-                [1, 0, 0, 0, 1, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
+PawnPromote = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 3, 0, 0],
+            [3, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [3, 0, 0, 0, 0, 0, 0, 0],
+            [1, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 1, 0, 0, 0, 3, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0]    
+    ]), 'King Jumps'
+)
 
-    myKing = np.uint64(0)
-    oppKing = np.uint64(0)
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
-
-@dataclass
-class KingJumps(BoardParent):
-    myPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 0, 1, 0, 1, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-
-    myKing = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 1, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-    
-    oppKing = np.uint64(0)
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
-
-@dataclass
-class KingZigzag(BoardParent):
-    myPawn = np.uint64(0)
-
-    myKing = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-    
-    oppKing = np.uint64(0)
-
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 1, 0, 1, 1, 0],
-                [1, 0, 0, 0, 0, 0, 0, 1],
-                [0, 0, 1, 0, 1, 0, 1, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 0, 1, 0, 1, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 0],
-                [0, 1, 0, 1, 0, 1, 0, 0]
-            ]))
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
-
-@dataclass
-class PawnPromote(BoardParent):
-    myPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 1, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 1, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 1, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0]
-            ]))
-
-    myKing = np.uint64(0)
-    oppKing = np.uint64(0)
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
-
-@dataclass
-class StartingAndJump(BoardParent):
-    myPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 1, 1, 1, 1, 1, 1],
-                [1, 1, 1, 1, 1, 1, 1, 1],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ]))
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 1, 0, 0],
-                [1, 1, 1, 1, 1, 1, 1, 1],
-                [0, 1, 1, 1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ]))
-
-    myKing = np.uint64(0)
-    oppKing = np.uint64(0)
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
-
-@dataclass
-class SingleMove(BoardParent):
-    myPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 1, 1, 1, 1, 1, 1, 1],
-                [1, 1, 1, 1, 1, 1, 1, 1],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ]))
-    oppPawn = array2bit(np.array([
-                [0, 0, 0, 0, 0, 1, 0, 0],
-                [0, 1, 1, 1, 1, 1, 1, 1],
-                [0, 1, 1, 1, 1, 1, 1, 1],
-                [1, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-                [0, 0, 0, 0, 0, 0, 0, 0],
-            ]))
-
-    myKing = np.uint64(0)
-    oppKing = np.uint64(0)
-
-    board = myPawn | myKing | oppPawn | oppKing
-    oppBoard = oppPawn | oppKing
+HasJumped = BoardParent(
+    np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 3, 0, 0, 0],
+            [0, 0, 1, 1, 1, 1, 1, 1],
+            [0, 0, 0, 0, 0, 0, 0, 0]    
+    ]), 'Has Jumped'
+)

@@ -231,3 +231,23 @@ def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
     
     return myBoards[0], myBoards[1], oppBoards[0], oppBoards[1]
         
+def numpyboard2bitboard(board):
+    myPawn = np.uint64(0)
+    myKing = np.uint64(0)
+    oppPawn = np.uint64(0)
+    oppKing = np.uint64(0)
+
+    for i in range(0, len(board)):
+        for j in range(0, len(board[i])):
+            idx = (7-i)*8 + j
+
+            if board[i][j] == 1:
+                myPawn = set_bit(idx, myPawn)
+            elif board[i][j] == 2:
+                myKing = set_bit(idx, myKing)
+            elif board[i][j] == 3:
+                oppPawn = set_bit(idx, oppPawn)
+            elif board[i][j] == 4:
+                oppKing = set_bit(idx, oppKing)
+
+    return myPawn, myKing, oppPawn, oppKing
