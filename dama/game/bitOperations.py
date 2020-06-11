@@ -1,12 +1,40 @@
 import pickle
+import struct
+import time
 import warnings
+from random import randint
 
+import numba as nb
 import numpy as np
+from numba import jit, njit, uint64
 
-warnings.filterwarnings("ignore", message='overflow')
+u64high = 0xffffffffffffffff
 
-BitReverseTable256 = np.array(\
-[
+rowMask = np.array([
+    0b0000000000000000000000000000000000000000000000000000000011111111,
+    0b0000000000000000000000000000000000000000000000001111111100000000,
+    0b0000000000000000000000000000000000000000111111110000000000000000,
+    0b0000000000000000000000000000000011111111000000000000000000000000,
+    0b0000000000000000000000001111111100000000000000000000000000000000,
+    0b0000000000000000111111110000000000000000000000000000000000000000,
+    0b0000000011111111000000000000000000000000000000000000000000000000,
+    0b1111111100000000000000000000000000000000000000000000000000000000
+], dtype=np.uint64)
+
+colMask = np.array([
+    0b0000000100000001000000010000000100000001000000010000000100000001,
+    0b0000001000000010000000100000001000000010000000100000001000000010,
+    0b0000010000000100000001000000010000000100000001000000010000000100,
+    0b0000100000001000000010000000100000001000000010000000100000001000,
+    0b0001000000010000000100000001000000010000000100000001000000010000,
+    0b0010000000100000001000000010000000100000001000000010000000100000,
+    0b0100000001000000010000000100000001000000010000000100000001000000,
+    0b1000000010000000100000001000000010000000100000001000000010000000
+], dtype=np.uint64)
+
+emptyBoard = 0
+
+BitReverseTable256 = [
   0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0, 
   0x08, 0x88, 0x48, 0xC8, 0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8, 
   0x04, 0x84, 0x44, 0xC4, 0x24, 0xA4, 0x64, 0xE4, 0x14, 0x94, 0x54, 0xD4, 0x34, 0xB4, 0x74, 0xF4, 
@@ -23,93 +51,57 @@ BitReverseTable256 = np.array(\
   0x0B, 0x8B, 0x4B, 0xCB, 0x2B, 0xAB, 0x6B, 0xEB, 0x1B, 0x9B, 0x5B, 0xDB, 0x3B, 0xBB, 0x7B, 0xFB,
   0x07, 0x87, 0x47, 0xC7, 0x27, 0xA7, 0x67, 0xE7, 0x17, 0x97, 0x57, 0xD7, 0x37, 0xB7, 0x77, 0xF7, 
   0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
-], dtype=np.uint64)
- 
+]
+
 # Flip about horizontal axis
+@njit(uint64(uint64))
 def flipH(x : int) -> int:
-    k1 = np.uint64(0x00FF00FF00FF00FF)
-    k2 = np.uint64(0x0000FFFF0000FFFF)
-    x = ( (x >> np.uint64(8))  & k1 ) | ( (x & k1) << np.uint64(8)  )
-    x = ( (x >> np.uint64(16)) & k2 ) | ( (x & k2) << np.uint64(16) )
-    x = (  x >> np.uint64(32)       ) | (  x       << np.uint64(32) )
+    k1 = 0x00FF00FF00FF00FF
+    k2 = 0x0000FFFF0000FFFF
+    x = ( (x >>  8)  & k1) | ( (x & k1) <<  8 )
+    x = ( (x >> 16) & k2 ) | ( (x & k2) << 16 )
+    x = (  x >> 32       ) | (  x       << 32 )
  
     return x
- 
+
 # Flip about vertical axis
+@njit(uint64(uint64))
 def flipV(x : int) -> int:
-    k1 = np.uint64(0x5555555555555555)
-    k2 = np.uint64(0x3333333333333333)
-    k4 = np.uint64(0x0F0F0F0F0F0F0F0F)
+    k1 = 0x5555555555555555
+    k2 = 0x3333333333333333
+    k4 = 0x0F0F0F0F0F0F0F0F
  
-    x = ( (x >> np.uint64(1)) & k1 ) | ( (x & k1) << np.uint64(1) )
-    x = ( (x >> np.uint64(2)) & k2 ) | ( (x & k2) << np.uint64(2) )
-    x = ( (x >> np.uint64(4)) & k4 ) | ( (x & k4) << np.uint64(4) )
+    x = ( (x >> 1) & k1 ) | ( (x & k1) << 1 )
+    x = ( (x >> 2) & k2 ) | ( (x & k2) << 2 )
+    x = ( (x >> 4) & k4 ) | ( (x & k4) << 4 )
  
     return x
 
-def reverse_lookup(x):
-    empty = np.uint64(0)
-    one = np.uint64(1)
-    eight = np.uint64(8)
-    counter = np.uint64(8)
-    mask = np.uint64(0xff)
- 
-    while (x):
-        # start counter at 8 and move to top of loop to avoid overflow warning
-        counter -= one
-        # bit = x & np.uint64(0xff)
-        # reversedBit = BitReverseTable256[bit]
-        # empty ^= (reversedBit << np.uint64(np.uint64(8)*counter))
- 
-        empty ^= (BitReverseTable256[x & mask] << np.uint64(eight*counter))
-        x >>= eight
- 
-    return empty  
-
-def reverse_slow(x):
-    empty = np.uint64(0)
-    one = np.uint64(1)
-    sixthree = np.uint64(63)
-    for i in reversed(range(64)):
-        k = np.uint64(i)
-        empty ^= ((x & (one << k )) >> k) << (sixthree - k)
- 
-    return empty
-
+@njit(uint64(uint64))
 def reverse64(x):
     return flipV(flipH(x))
 
+@njit
 def initpopCountOfByte256():
     popCountOfByte256 = np.zeros(256, dtype=np.uint64)
     for i in range(1, 256):
-        popCountOfByte256[i] = popCountOfByte256[int(i / 2)] + (i & 1)
+        popCountOfByte256[i] = popCountOfByte256[int(i / 2)] + (i & 1);
     return popCountOfByte256
 
-# popCountOfByte256 = initpopCountOfByte256()
-popCountOfByte256 = np.array([0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3, 2, 3,
-                        3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4, 2, 3, 3, 4,
-                        3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 1, 2,
-                        2, 3, 2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5,
-                        3, 4, 4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5,
-                        5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 1, 2, 2, 3,
-                        2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4,
-                        4, 5, 4, 5, 5, 6, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5, 4, 5, 5, 6,
-                        3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 2, 3, 3, 4, 3, 4,
-                        4, 5, 3, 4, 4, 5, 4, 5, 5, 6, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6,
-                        5, 6, 6, 7, 3, 4, 4, 5, 4, 5, 5, 6, 4, 5, 5, 6, 5, 6, 6, 7, 4, 5,
-                        5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8], dtype=np.uint64)
-
 popMask = np.uint64(0xff)
+popCountOfByte256 = initpopCountOfByte256()
 
-def popCount (x:int) -> int:
+@njit(uint64(uint64))
+def popCount (x):
    return popCountOfByte256[ x                   & popMask] + \
-          popCountOfByte256[(x >>  np.uint64(8)) & popMask] + \
-          popCountOfByte256[(x >> np.uint64(16)) & popMask] + \
-          popCountOfByte256[(x >> np.uint64(24)) & popMask] + \
-          popCountOfByte256[(x >> np.uint64(32)) & popMask] + \
-          popCountOfByte256[(x >> np.uint64(40)) & popMask] + \
-          popCountOfByte256[(x >> np.uint64(48)) & popMask] + \
-          popCountOfByte256[ x >> np.uint64(56)]
+          popCountOfByte256[(x >>  8) & popMask] + \
+          popCountOfByte256[(x >> 16) & popMask] + \
+          popCountOfByte256[(x >> 24) & popMask] + \
+          popCountOfByte256[(x >> 32) & popMask] + \
+          popCountOfByte256[(x >> 40) & popMask] + \
+          popCountOfByte256[(x >> 48) & popMask] + \
+          popCountOfByte256[ x >> 56]
+
 
 index64 = np.array([
     0, 47,  1, 56, 48, 27,  2, 60,
@@ -120,7 +112,7 @@ index64 = np.array([
    34, 51, 20, 43, 31, 22, 10, 45,
    25, 39, 14, 33, 19, 30,  9, 24,
    13, 18,  8, 12,  7,  6,  5, 63
-], dtype=np.uint64)
+])
 debruijn64 = np.uint64(0x03f79d71b4cb0a89)
 
 # /**
@@ -131,6 +123,8 @@ debruijn64 = np.uint64(0x03f79d71b4cb0a89)
 #  * @return index (0..63) of most significant one bit
 #  */
 # https://www.chessprogramming.org/BitScan#De_Bruijn_Multiplication_2
+
+@njit(uint64(uint64))
 def bitScanReverse(bb):
     if bb == 0:
         return 0
@@ -151,16 +145,20 @@ def bitScanReverse(bb):
 #  * @precondition bb != 0
 #  * @return index (0..63) of least significant one bit
 #  */
+@njit(uint64(uint64))
 def bitScanForward(bb):
    if bb == 0:
        return 0
    return index64[((bb ^ (bb-np.uint64(1))) * debruijn64) >> np.uint64(58)]
 
+@njit(uint64(uint64, uint64))
 def set_bit(n, bit):
-    return bit | (np.uint64(1) << np.uint64(n))
+    return bit | (1 << n)
 
+@njit(uint64(uint64, uint64))
 def clear_bit(n, bit):
-    return bit & (~(np.uint64(1) << np.uint64(n)))
+    return bit & (~(1 << n))
 
+@njit(uint64(uint64, uint64))
 def toggle_bit(n, bit):
-    return bit ^ (np.uint64(1) << np.uint64(n))
+    return bit ^ (1 << n)
