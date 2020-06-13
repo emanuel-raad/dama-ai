@@ -5,21 +5,28 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Dama on PC",
+            "name": "(PC) Dama",
             "type": "python",
             "request": "launch",
             "module": "dama.scripts.start_game",
             "cwd": "H:\\Coding\\dama-ai"
         },
         {
-            "name": "AlphaBeta on PC",
+            "name": "(PC) Attack Routines",
+            "type": "python",
+            "request": "launch",
+            "module": "dama.game.attack_routines",
+            "cwd": "H:\\Coding\\dama-ai"
+        },
+        {
+            "name": "(PC) AlphaBeta",
             "type": "python",
             "request": "launch",
             "module": "dama.scripts.test_ab",
             "cwd": "H:\\Coding\\dama-ai"
         },
         {
-            "name": "Dama on Laptop",
+            "name": "(Laptop) Dama",
             "type": "python",
             "request": "launch",
             "module": "dama",

@@ -1,32 +1,20 @@
 import os
 import pickle
+from dataclasses import dataclass
+from enum import Enum
+from typing import List
 
 import numpy as np
-
 from numba import jit, njit, uint64
-
-from bitOperations import *
-from bitboard import *
-from bitboard_constants import *
-from move import MoveNode, MoveTypes
-from attack import get_king_attack, pawnSingleMasks, pawnDoubleMasks
 from treelib import Node, Tree
 
-from enum import Enum
-
-# def load_lookup(filePath, fallbackGenerator):
-#     if os.path.exists(filePath):
-#         return pickle.load(open(filePath, "rb"))
-#     else:
-#         return fallbackGenerator()
-
-# # Should be in this order, because the later generators depend on the earlier ones
-# base = os.path.join(os.path.dirname(__file__), 'lookup')
-# blockerMasks    = load_lookup(os.path.join(base, "blockers_mask.pkl")    , _generate_blockers_mask)
-# allBlockers     = load_lookup(os.path.join(base, "all_blocker.pkl")      , _generate_all_blockers)
-# kingMagicLookup = load_lookup(os.path.join(base, "king_magic_lookup.pkl"), _generate_king_lookup)
-# pawnSingleMasks = load_lookup(os.path.join(base, "pawn_single.pkl")      , _generate_pawn_single_moves)
-# pawnDoubleMasks = load_lookup(os.path.join(base, "pawn_double.pkl")      , _generate_pawn_jumps)
+from dama.game.attack import (blockerMasks, get_king_attack, kingMagicLookup,
+                    pawnDoubleMasks, pawnSingleMasks)
+from dama.game.bitboard import *
+from dama.game.bitboard import Bitboard
+from dama.game.bitboard_constants import *
+from dama.game.bitOperations import *
+from dama.game.move import MoveNode, MoveTypes
 
 def decompose_directions(pos, board, mask):
     masks = mask[pos]
@@ -62,7 +50,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
     if isPawn:
         attacks = pawnSingleMasks[pos] & oppBoard
     elif isKing:
-        firstAttackQuery = np.uint64(get_king_attack(pos, board))
+        firstAttackQuery = np.uint64(get_king_attack(pos, board, blockerMasks, kingMagicLookup))
         attacks = firstAttackQuery & np.uint64(oppBoard)
 
     if (attacks):
@@ -77,13 +65,13 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             # Remove the opp pieces that are being attacked
             tempBoard = board & ~attacks
             # Run again
-            landingSpots = np.uint64(get_king_attack(pos, tempBoard)) & ~firstAttackQuery & ~board
+            landingSpots = np.uint64(get_king_attack(pos, tempBoard, blockerMasks, kingMagicLookup)) & ~firstAttackQuery & ~board
 
         # The case where the attack wasn't valid, but the king can still move
         # Only kings are ever going to reach this point of the logic
         if landingSpots == 0 and canMove and not evaluator.hasEverJumped:
             # print("Only king sliding moves available")
-            slide = get_active_indices(get_king_attack(pos, board) & ~board)
+            slide = get_active_indices(np.uint64(get_king_attack(pos, board, blockerMasks, kingMagicLookup)) & ~board)
             for i in slide:
                 child = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=False)
                 childNode = Node(tag=child.tag, data=child)
@@ -103,23 +91,15 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                     
                     for land in l_indices:
                         evaluator.jumped()
-                        child = MoveNode(moveFrom=pos, moveTo=land, capture=capture, moveType=MoveTypes.JUMP, promotion=False)
-                        
-                        childBoard = board
-                        childOppBoard = oppBoard
-                        childMyKing = myKing
-                        childMyPawn = myPawn
-
-                        # Remove the captured piece
-                        childOppBoard = clear_bit(capture, childOppBoard)
-                        childBoard = clear_bit(capture, childBoard)
-
-                        # Move the Piece
-                        childBoard = move_piece(pos, land, childBoard)
-                        if isPawn:
-                            childMyPawn = move_piece(pos, land, childMyPawn)
-                        elif isKing:
-                            childMyKing = move_piece(pos, land, childMyKing)
+                        child = MoveNode(
+                            moveFrom=pos, moveTo=land, capture=capture, moveType=MoveTypes.JUMP, promotion=False
+                        )
+                              
+                        childMyPawn, childMyKing, childOppPawn, childOppKing = perform_move(
+                            [child], myPawn, myKing, oppBoard, 0
+                        )
+                        childOppBoard = childOppPawn
+                        childBoard = childMyPawn | childMyKing | childOppBoard
 
                         isPromoted, promotePos = check_promotions(childMyPawn)
                         if isPromoted:
@@ -138,9 +118,9 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
 
     elif attacks == 0 and canMove and not evaluator.hasEverJumped:
         # No attacks availalbe, can only move
-        if is_piece_present(pos, myPawn):
+        if isPawn:
             slide = get_active_indices(pawnSingleMasks[pos] & ~board)
-        elif is_piece_present(pos, myKing):
+        elif isKing:
             slide = get_active_indices(attacks & ~board)
 
         for i in slide:
@@ -166,19 +146,28 @@ class Evaluator:
     def trackJump(self, hasJumped):
         self.jumpTracker.append(hasJumped)
 
-def evaluate(boardClass:BoardParent):
-    moveTreeList = []
+def evaluate(board, myPawn, myKing, oppBoard):
     evaluator = Evaluator()
     maxDepth = 0
 
-    indices = get_active_indices(boardClass.myPawn)
-    indices.extend(get_active_indices(boardClass.myKing))
+    indices = get_active_indices(myPawn)
+    indices.extend(get_active_indices(myKing))
+    moveTreeList = []
 
     # Could split indices into equally sized lists and run threaded
+    # TODO: fix all the functions so they can be compiled. ie do not rely on global variables
+    # instead pass the globals in as function parameters
+    # Then fix up get_all_generalized_moves() so each run is independent of each other. which means
+    # removing the evaluator object.
+    # It'll make the validation step later on more time consuming, but it MIGHT speed up the move generation
+    # who knows, guess we'll see
+    # Might also be better performance to make each process run evaluate() for each board instead of having
+    # each process run get_all_generalized_moves() for each piece
+    # Should test both alternatives out
 
-    for pos in indices:
+    for i in range(len(indices)):
         tree = get_all_generalized_moves(
-            pos, boardClass.board, boardClass.myPawn, boardClass.myKing, boardClass.oppBoard, evaluator=evaluator
+            indices[i], board, myPawn, myKing, oppBoard, evaluator=evaluator
         )
 
         currentDepth = tree.depth()
@@ -194,28 +183,22 @@ def evaluate(boardClass:BoardParent):
         # Reset all the time between pieces
         evaluator.resetJump()
 
+    if len(evaluator.depthTracker) > 0:
+        m = max(evaluator.depthTracker)
+        remove = sorted([i for i, j in enumerate(evaluator.depthTracker) if j!=m], reverse=True)
 
-    # A lot of the pruning can be simplified by expanding on the evaluator class
-    # Should keep track if each tree has jumped AND the depth of each tree
-    # 
-    # If any tree jumped, remove the ones that didn't
-    # 
-    # For every short tree added before the longest one, delete the short ones
-    # 
-    # Finally combine them all in one big tree
-
-    m = max(evaluator.depthTracker)
-    remove = sorted([i for i, j in enumerate(evaluator.depthTracker) if j!=m], reverse=True)
-
-    for i in remove:
-        del moveTreeList[i]
-        del evaluator.jumpTracker[i]
-    
-    if evaluator.hasEverJumped:
-        remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False])
+        # For every short tree added before the longest one, delete the short ones
         for i in remove:
             del moveTreeList[i]
+            del evaluator.jumpTracker[i]
+        
+        # If any tree jumped, remove the ones that didn't
+        if evaluator.hasEverJumped:
+            remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False])
+            for i in remove:
+                del moveTreeList[i]
 
+    # Finally combine them all in one big tree
     tree = Tree()
     rootMove = MoveNode(moveFrom=None, moveTo=None, moveType=MoveTypes.START)
     rootNode = Node(tag=rootMove.tag, data=rootMove)
@@ -286,24 +269,72 @@ def listFromTree(tree):
             moveList[i][j] = tree.get_node(moveList[i][j]).data
     return moveList
 
-if __name__ == '__main__':
-    import time
+def get_all_legal_moves_list(currentBoard:Bitboard):
+    return listFromTree(getValidBranch(evaluate(currentBoard.board, currentBoard.myPawn, currentBoard.myKing, currentBoard.oppBoard)))
 
-    # ################################################
-    # Evaluate the Generalized Routine
+@dataclass
+class MoveSearchNode:
+    bitboards : Bitboard
+    moveList : List[MoveNode]
+    activePlayer : bool
 
-    # boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote]
-    boards = [StartingBoard]
+def move_search(
+    currentBoard:Bitboard, depth, activePlayer = True, 
+    tree = None, parentNode = None
+    ):
+
+    # Flip board between moves, but not for the first time
+    if tree is not None:
+        currentBoard = flip_color(currentBoard)
+
+    if tree is None:
+        tree = Tree()
+        parentMoveSearchNode = MoveSearchNode(bitboards=currentBoard, moveList=[], activePlayer=activePlayer)
+        parentNode = Node(data=parentMoveSearchNode)
+        tree.add_node(parentNode)
+
+    moveList = get_all_legal_moves_list(currentBoard)
+
+    for move in moveList:
+        
+        # n_jumps = 0
+        # n_promotions = 0
+        # for m in move:
+        #     if m.moveType == MoveTypes.JUMP:
+        #         n_jumps += 1
+        #     if m.promotion:
+        #         n_promotions += 1
+
+        childBoard = perform_move_board(move, currentBoard)
+
+        # assert popCount(childBoard.board) == (popCount(currentBoard.board) - n_jumps)
+        # assert n_promotions == 1 or n_promotions == 0
+        # assert popCount(childBoard.myKing) == (popCount(currentBoard.myKing) + n_promotions)
+
+        childState = MoveSearchNode(bitboards=childBoard, moveList=move, activePlayer=not activePlayer)
+        childNode = Node(data=childState)
+        tree.add_node(childNode, parent=parentNode)
+
+        if depth is not 0:
+            move_search(
+                childBoard, depth - 1, activePlayer = not activePlayer,
+                tree = tree, parentNode = childNode
+            )
+
+    return tree
+
+def test_bitboard_contants():
+    boards = [StartingBoard, PawnJumps, KingJumps, PawnPromote]
 
     for b in boards:
         print(b.tag)
-        
+        tree = evaluate(b.board, b.myPawn, b.myKing, b.oppBoard)
         time1 = time.time()
-        tree = evaluate(b)
+        tree = evaluate(b.board, b.myPawn, b.myKing, b.oppBoard)
         time2 = time.time()
         getValidBranch(tree)
-        moveList = listFromTree(tree)
         time3 = time.time()
+        moveList = listFromTree(tree)
 
         print("Generated the tree in: {}us".format(1000000*(time2-time1)))
         print("Validated the tree in: {}us".format(1000000*(time3-time2)))
@@ -316,24 +347,27 @@ if __name__ == '__main__':
         #     print_bitboard([ myPawn1, myKing1, oppPawn1, oppKing1 ])
         #     print()
 
-    def timethis(n, board):
-        """ Returns the individual time for each run in ms
-        """
-        cumTime = 0
-        for i in range(0, n):
-            time1 = time.time()
-            getValidBranch(evaluate(board))
-            time2 = time.time()
-            cumTime += (time2 - time1)
-        
-        cumTime *= 1000
-        
-        return cumTime / n
+def test_flipping_color(board):
+    print_bitboard([ board.board, board.myPawn, board.oppPawn ])
+    print()
 
-    print(timethis(1000, StartingBoard))
+    # white moves
+    white_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))
+    white_moves = listFromTree(white_tree)
+    board = perform_move_board(white_moves[0], board)
+    print_bitboard([ board.board, board.myPawn, board.oppPawn ])
+    print()
 
-    # Starting board ~1.3ms
-    # Pawn promote ~0.7ms
-    # King jumps ~0.9ms
-    # Pawn jumps ~0.7ms
-    # King zigzag ~
+    # black moves
+    board = flip_color(board)
+    black_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))
+    black_moves = listFromTree(black_tree)
+    board = perform_move_board(black_moves[0], board)
+    print_bitboard([ board.board, board.myPawn, board.oppPawn ])
+    print()
+
+    #  white again
+    board = flip_color(board)
+    print_bitboard([ board.board, board.myPawn, board.oppPawn ])
+    print()
+    white_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))

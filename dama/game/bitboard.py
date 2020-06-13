@@ -1,14 +1,14 @@
 import struct
+from dataclasses import dataclass
+from random import randint
 
+import numba as nb
 import numpy as np
 from multipledispatch import dispatch
+from numba import int64, jit, njit, uint64
 
-from bitOperations import clear_bit, set_bit, toggle_bit
-from move import MoveNode, MoveTypes
-
-from numba import jit, njit, uint64
-import numba as nb
-from random import randint
+from dama.game.bitOperations import clear_bit, set_bit, toggle_bit, reverse64
+from dama.game.move import MoveNode, MoveTypes
 
 u64high = 0xffffffffffffffff
 
@@ -34,17 +34,11 @@ colMask = np.array([
     0b1000000010000000100000001000000010000000100000001000000010000000
 ], dtype=np.uint64)
 
-@njit(uint64(uint64, uint64))
+@njit(uint64(uint64, uint64), cache=True)
 def is_piece_present(pos, board):
     mask = 1 << pos
     return (board & mask) != 0
 
-def set_cell_value(board : int, row : int, col : int, value:int) -> int:
-    shift = np.uint64((row * row_size + col))
-    newBit = np.uint64(value) << shift
-    return (board | newBit)
-
-@njit
 def initialize_board(rows):
     board = 0
  
@@ -59,14 +53,6 @@ def array2bit(arr):
 
 def bit2array(x):
     return np.flip(np.unpackbits(np.array(list(reversed(struct.pack('Q', x))), dtype=np.uint8).reshape(-1, 1), axis=1), axis=1)
-
-@njit
-def index(row, col):
-    return row*8 + col
-
-@njit(uint64(uint64))
-def single(pos):
-    return 1 << pos
 
 def print_bitboard(bits, pad=8):
     boards = []
@@ -83,43 +69,67 @@ def print_bitboard(bits, pad=8):
             boardStr += ("{}{}".format(boards[j][i], padding))
         print(boardStr)
 
-@njit(nb.typeof((uint64(0), uint64(0)))(uint64))
-def get_row_col(i):
-    row = int(i / 8)
-    col = int(i % 8)
-    return (row, col)
-
 def get_rand_board():
     return uint64(randint(0, u64high))
 
 def get_rand_pos():
     return randint(0, 63)
 
-@njit(uint64())
+@njit(cache=True)
+def index(row, col):
+    return row*8 + col
+
+@njit(uint64(uint64), cache=True)
+def single(pos):
+    return 1 << pos
+
+@njit(nb.typeof((uint64(0), uint64(0)))(uint64), cache=True)
+def get_row_col(i):
+    row = int(i / 8)
+    col = int(i % 8)
+    return (row, col)
+
+@njit(uint64(), cache=True)
 def get_rand_king():
     return 1 << randint(0,63)
 
 # https://stackoverflow.com/questions/49592295/getting-the-position-of-1-bits-in-a-python-long-object
-@njit
+# @njit(cache=True)
+# def get_active_indices(board : int):
+#     one_bit_indexes = []
+#     index = 0
+#     count = 0
+
+#     while board: # returns true if sum is non-zero
+#         if board & 1: # returns true if right-most bit is 1
+#             one_bit_indexes.append(index)
+#             count += 1
+#         board >>= 1 # discard the right-most bit
+#         index += 1
+#     return one_bit_indexes
+
 def get_active_indices(board : int):
     one_bit_indexes = []
     index = 0
     count = 0
-
+    one = np.uint64(1)
+    board = np.uint64(board)
+    
     while board: # returns true if sum is non-zero
-        if board & 1: # returns true if right-most bit is 1
+        if board & one: # returns true if right-most bit is 1
             one_bit_indexes.append(index)
             count += 1
-        board >>= 1 # discard the right-most bit
+        board >>= one # discard the right-most bit
         index += 1
     return one_bit_indexes
 
+@njit(cache=True)
 def move_piece(start, end, board):
     board = set_bit(end, board)
     board = clear_bit(start, board)
     return board
 
-@njit(nb.typeof((uint64(0), uint64(0), uint64(0), uint64(0)))(uint64))
+@njit(nb.typeof((uint64(0), uint64(0), uint64(0), uint64(0)))(uint64), cache=True)
 def generate_ray_masks(x):
     row, col = get_row_col(x)
 
@@ -152,7 +162,7 @@ def promote(pos, myPawn, myKing):
     return myPawn, myKing
 
 def check_promotions(myPawn):
-    masked = myPawn & rowMask[7]
+    masked = np.uint64(myPawn) & rowMask[7]
     if masked != 0:
         indices = get_active_indices(masked)
         if len(indices) > 1 :
@@ -161,6 +171,16 @@ def check_promotions(myPawn):
             return True, indices[0]
     else:
         return False, 0
+
+class Bitboard():
+    def __init__(self, myPawn, myKing, oppPawn, oppKing):
+        self.myPawn = myPawn
+        self.myKing = myKing
+        self.oppPawn = oppPawn
+        self.oppKing = oppKing
+        self.board = myPawn | myKing | oppPawn | oppKing
+        self.oppBoard = oppPawn | oppKing
+        self.myBoard = myPawn | myKing
 
 def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
     myBoards = [myPawn, myKing]
@@ -176,10 +196,19 @@ def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
                 if is_piece_present(move.capture, oppBoards[i]):
                     oppBoards[i] = toggle_bit(move.capture, oppBoards[i])
         if move.promotion == True:
-            myBoards[0], myBoards[1] = promote(move.moveTo, myBoards[0], myBoards[0])
+            myBoards[0], myBoards[1] = promote(move.moveTo, myBoards[0], myBoards[1])
     
     return myBoards[0], myBoards[1], oppBoards[0], oppBoards[1]
-        
+
+def perform_move_board(moveList, board):
+    myPawn, myKing, oppPawn, oppKing = perform_move(moveList, board.myPawn, board.myKing, board.oppPawn, board.oppKing)
+    return Bitboard(myPawn, myKing, oppPawn, oppKing)
+
+def flip_color(board):
+    return Bitboard(
+        reverse64(board.oppPawn), reverse64(board.oppKing), reverse64(board.myPawn), reverse64(board.myKing)
+    )
+
 def numpyboard2bitboard(board):
     myPawn = np.uint64(0)
     myKing = np.uint64(0)

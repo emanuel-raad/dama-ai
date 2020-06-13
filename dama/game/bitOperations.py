@@ -53,35 +53,61 @@ BitReverseTable256 = [
   0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
 ]
 
+# # Flip about horizontal axis
+# # @njit(uint64(uint64), cache=True)
+# def flipH(x : int) -> int:
+#     k1 = 0x00FF00FF00FF00FF
+#     k2 = 0x0000FFFF0000FFFF
+#     x = ( (x >>  8)  & k1) | ( (x & k1) <<  8 )
+#     x = ( (x >> 16) & k2 ) | ( (x & k2) << 16 )
+#     x = (  x >> 32       ) | (  x       << 32 )
+ 
+#     return x
+
+# # Flip about vertical axis
+# # @njit(uint64(uint64), cache=True)
+# def flipV(x : int) -> int:
+#     k1 = 0x5555555555555555
+#     k2 = 0x3333333333333333
+#     k4 = 0x0F0F0F0F0F0F0F0F
+ 
+#     x = ( (x >> 1) & k1 ) | ( (x & k1) << 1 )
+#     x = ( (x >> 2) & k2 ) | ( (x & k2) << 2 )
+#     x = ( (x >> 4) & k4 ) | ( (x & k4) << 4 )
+ 
+#     return x
+
 # Flip about horizontal axis
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def flipH(x : int) -> int:
-    k1 = 0x00FF00FF00FF00FF
-    k2 = 0x0000FFFF0000FFFF
-    x = ( (x >>  8)  & k1) | ( (x & k1) <<  8 )
-    x = ( (x >> 16) & k2 ) | ( (x & k2) << 16 )
-    x = (  x >> 32       ) | (  x       << 32 )
+    x = np.uint64(x)
+    k1 = np.uint64(0x00FF00FF00FF00FF)
+    k2 = np.uint64(0x0000FFFF0000FFFF)
+    x = ( (x >> np.uint64(8))  & k1 ) | ( (x & k1) << np.uint64(8)  )
+    x = ( (x >> np.uint64(16)) & k2 ) | ( (x & k2) << np.uint64(16) )
+    x = (  x >> np.uint64(32)       ) | (  x       << np.uint64(32) )
  
     return x
-
+ 
 # Flip about vertical axis
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def flipV(x : int) -> int:
-    k1 = 0x5555555555555555
-    k2 = 0x3333333333333333
-    k4 = 0x0F0F0F0F0F0F0F0F
+    x = np.uint64(x)
+    k1 = np.uint64(0x5555555555555555)
+    k2 = np.uint64(0x3333333333333333)
+    k4 = np.uint64(0x0F0F0F0F0F0F0F0F)
  
-    x = ( (x >> 1) & k1 ) | ( (x & k1) << 1 )
-    x = ( (x >> 2) & k2 ) | ( (x & k2) << 2 )
-    x = ( (x >> 4) & k4 ) | ( (x & k4) << 4 )
+    x = ( (x >> np.uint64(1)) & k1 ) | ( (x & k1) << np.uint64(1) )
+    x = ( (x >> np.uint64(2)) & k2 ) | ( (x & k2) << np.uint64(2) )
+    x = ( (x >> np.uint64(4)) & k4 ) | ( (x & k4) << np.uint64(4) )
  
     return x
 
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def reverse64(x):
     return flipV(flipH(x))
 
-@njit
+@njit(cache=True)
 def initpopCountOfByte256():
     popCountOfByte256 = np.zeros(256, dtype=np.uint64)
     for i in range(1, 256):
@@ -91,7 +117,7 @@ def initpopCountOfByte256():
 popMask = np.uint64(0xff)
 popCountOfByte256 = initpopCountOfByte256()
 
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def popCount (x):
    return popCountOfByte256[ x                   & popMask] + \
           popCountOfByte256[(x >>  8) & popMask] + \
@@ -124,7 +150,7 @@ debruijn64 = np.uint64(0x03f79d71b4cb0a89)
 #  */
 # https://www.chessprogramming.org/BitScan#De_Bruijn_Multiplication_2
 
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def bitScanReverse(bb):
     if bb == 0:
         return 0
@@ -145,20 +171,20 @@ def bitScanReverse(bb):
 #  * @precondition bb != 0
 #  * @return index (0..63) of least significant one bit
 #  */
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def bitScanForward(bb):
    if bb == 0:
        return 0
    return index64[((bb ^ (bb-np.uint64(1))) * debruijn64) >> np.uint64(58)]
 
-@njit(uint64(uint64, uint64))
+@njit(uint64(uint64, uint64), cache=True)
 def set_bit(n, bit):
     return bit | (1 << n)
 
-@njit(uint64(uint64, uint64))
+@njit(uint64(uint64, uint64), cache=True)
 def clear_bit(n, bit):
     return bit & (~(1 << n))
 
-@njit(uint64(uint64, uint64))
+@njit(uint64(uint64, uint64), cache=True)
 def toggle_bit(n, bit):
     return bit ^ (1 << n)

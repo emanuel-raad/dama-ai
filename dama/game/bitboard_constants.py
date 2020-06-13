@@ -1,6 +1,6 @@
 import numpy as np
 
-from bitboard import array2bit, initialize_board, numpyboard2bitboard
+from dama.game.bitboard import array2bit, initialize_board, numpyboard2bitboard
 import numba as nb
 
 class BoardParent:
@@ -74,7 +74,7 @@ PawnPromote = BoardParent(
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 1, 0, 0, 0, 3, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]    
-    ]), 'King Jumps'
+    ]), 'Pawn Promote'
 )
 
 HasJumped = BoardParent(

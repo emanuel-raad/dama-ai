@@ -5,10 +5,10 @@ import numba as nb
 import numpy as np
 from numba import jit, njit, uint64
 
-from bitOperations import *
-from bitboard import *
+from dama.game.bitOperations import *
+from dama.game.bitboard import *
 
-@njit(uint64(uint64, uint64))
+@njit(uint64(uint64, uint64), cache=True)
 def rayMoves(pos, board):
     row, col = get_row_col(pos)
     rays = uint64(0)
@@ -43,7 +43,7 @@ def rayMoves(pos, board):
 
     return rays
 
-def generate_pawn_single_moves():
+def _generate_pawn_single_moves():
     moves = []
     for i in reversed(range(0, 8)):
         for j in range(0, 8):
@@ -57,7 +57,7 @@ def generate_pawn_single_moves():
             moves.append(array2bit(board))
     return moves
 
-def generate_pawn_jumps():
+def _generate_pawn_jumps():
     moves = []
     for i in reversed(range(0, 8)):
         for j in range(0, 8):
@@ -70,7 +70,6 @@ def generate_pawn_jumps():
                 board[i-2][j] = 1
             moves.append(array2bit(board))    
     return moves
-
 
 # Magic bitboards
 # ~~~~spooky
@@ -104,7 +103,7 @@ _rookIndexBits = np.array([
     12, 11, 11, 11, 11, 11, 11, 12
 ], dtype=np.uint64)
 
-@njit(uint64(uint64))
+@njit(uint64(uint64), cache=True)
 def _generate_king_masks(pos):
     row, col = get_row_col(pos)
     masks = (rowMask[row] | colMask[col]) \
@@ -132,35 +131,63 @@ def _generate_blockers(idx, pos, mask):
 
     return blocker
 
-#######################################################
-# GENERATE GLOBAL CONSTANTS
+def _generate_blockers_mask():
+    blockerMasks = np.zeros(64, dtype=np.uint64)
+    for i in range(0, 64):
+        blockerMasks[i] = _generate_king_masks(i)
+        assert popCount(blockerMasks[i]) == _rookIndexBits[i]
+    return blockerMasks
 
-pawnSingleMasks = generate_pawn_single_moves()
-pawnDoubleMasks = generate_pawn_jumps()
+def _generate_all_blockers():
+    allBlockers = np.zeros(shape=(64, 4096), dtype=np.uint64)
+    for i in range(0, 64):
+        n = np.power(np.uint64(2), _rookIndexBits[i])
+        for j in range(0, n):
+            allBlockers[i][j] = _generate_blockers(j, i, blockerMasks[i])
+    return allBlockers
 
-blockerMasks = np.zeros(64, dtype=np.uint64)
-for i in range(0, 64):
-    blockerMasks[i] = _generate_king_masks(i)
-    assert popCount(blockerMasks[i]) == _rookIndexBits[i]
+def _generate_king_lookup():
+    kingMagicLookup = np.zeros(shape=(64, 4096), dtype=np.uint64)
+    for i in range(0, 64):
+        n = np.power(np.uint64(2), _rookIndexBits[i])
 
-allBlockers = np.zeros(shape=(64, 4096), dtype=np.uint64)
-for i in range(0, 64):
-    n = np.power(np.uint64(2), _rookIndexBits[i])
-    for j in range(0, n):
-        allBlockers[i][j] = _generate_blockers(j, i, blockerMasks[i])
-
-kingMagicLookup = np.zeros(shape=(64, 4096), dtype=np.uint64)
-for i in range(0, 64):
-    n = np.power(np.uint64(2), _rookIndexBits[i])
-
-    for j in range(0, n):
-        blockers = allBlockers[i][j]
-        key = (blockers * _rookMagics[i]) >> (np.uint64(64) - _rookIndexBits[i])
-        kingMagicLookup[i][key] = rayMoves(i, blockers)
+        for j in range(0, n):
+            blockers = allBlockers[i][j]
+            key = (blockers * _rookMagics[i]) >> (np.uint64(64) - _rookIndexBits[i])
+            kingMagicLookup[i][key] = rayMoves(i, blockers)
+    return kingMagicLookup
 
 # Finally, get the attack with this function
-@njit(uint64(uint64, uint64))
-def get_king_attack(pos, board):
-    board &= blockerMasks[pos]
+@njit(cache=True)
+def get_king_attack(pos, board, mask, lookup):
+    board &= mask[pos]
     key = (board * _rookMagics[pos]) >> (np.uint64(64) - _rookIndexBits[pos])
-    return kingMagicLookup[pos][key]
+    return lookup[pos][key]
+
+import pickle
+import os
+import logging
+# pickle.dump(   blockerMasks, open(    "blockers_mask.pkl", "wb"))
+# pickle.dump(    allBlockers, open(      "all_blocker.pkl", "wb"))
+# pickle.dump(kingMagicLookup, open("king_magic_lookup.pkl", "wb"))
+
+def load_lookup(filePath, fallbackGenerator):
+    if os.path.exists(filePath):
+        return pickle.load(open(filePath, "rb"))
+    else:
+        return fallbackGenerator()
+
+
+#######################################################
+# LOAD GLOBAL CONSTANTS
+
+time1 = time.time()
+base = os.path.join(os.path.dirname(__file__), 'lookup')
+blockerMasks    = load_lookup(os.path.join(base, "blockers_mask.pkl")    , _generate_blockers_mask)
+allBlockers     = load_lookup(os.path.join(base, "all_blocker.pkl")      , _generate_all_blockers)
+kingMagicLookup = load_lookup(os.path.join(base, "king_magic_lookup.pkl"), _generate_king_lookup)
+pawnSingleMasks = load_lookup(os.path.join(base, "pawn_single.pkl")      , _generate_pawn_single_moves)
+pawnDoubleMasks = load_lookup(os.path.join(base, "pawn_double.pkl")      , _generate_pawn_jumps)
+time2 = time.time()
+msg = "Loaded globals in {:.2f} ms".format(1000*(time2-time1))
+print(msg)

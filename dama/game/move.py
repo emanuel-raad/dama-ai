@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import List
 from enum import Enum
 
-from constants import Color
-from constants import Pieces
+from dama.game.constants import Color
+from dama.game.constants import Pieces
 
 @dataclass
 class Move:
@@ -33,7 +33,7 @@ class MoveTypes(Enum):
 class MoveNode(object):
     """Class to represent a move
     """
-    def __init__(self, moveFrom, moveTo=None, capture=None, moveType=None, promotion=False):
+    def __init__(self, moveFrom, moveTo=None, capture=None, moveType=None, promotion=False, gameboard=None):
         """Initialize a move
 
         Args:
@@ -48,6 +48,7 @@ class MoveNode(object):
         self.capture   = capture
         self.moveType  = moveType
         self.promotion = promotion
+        self.gameboard = gameboard
 
         # self.tag = "(From:{} To:{} Capture:{})".format(self.moveFrom, self.moveTo, self.capture)
         self.tag = "(F:{} T:{} C:{})".format(self.moveFrom, self.moveTo, self.capture)

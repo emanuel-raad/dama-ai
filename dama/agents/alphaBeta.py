@@ -1,9 +1,12 @@
-from dama.agents.player import Player
-from dama.agents import helper
-from dama.agents.placeholder import getPlaceholder
+import time
 
 import numpy as np
 from treelib import Node, Tree
+
+from dama.agents import helper
+from dama.agents.placeholder import getPlaceholder
+from dama.agents.player import Player
+
 
 class AlphaBeta(Player):
 
@@ -54,11 +57,15 @@ class AlphaBeta(Player):
             return value
 
     def request_move(self, board, moveList, removeList):
+        
+        time1 = time.time()
         tree = helper.getMoveTree(
             board, moveList, removeList, self.color, self.movesAhead, moveCache=self.moveCache
         )
+        time2 = time.time()
+        totalTime = 1000 * (time2 - time1)
 
-        print("Looked at {} possible boards".format(tree.size()))
+        print("Looked at {} possible boards in {}ms".format(tree.size(), totalTime))
 
         # print
         # (
