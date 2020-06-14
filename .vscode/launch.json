@@ -15,7 +15,7 @@
             "name": "(PC) Attack Routines",
             "type": "python",
             "request": "launch",
-            "module": "dama.game.attack_routines",
+            "module": "dama.scripts.test_move_gen",
             "cwd": "H:\\Coding\\dama-ai"
         },
         {

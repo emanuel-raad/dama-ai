@@ -190,4 +190,4 @@ pawnSingleMasks = load_lookup(os.path.join(base, "pawn_single.pkl")      , _gene
 pawnDoubleMasks = load_lookup(os.path.join(base, "pawn_double.pkl")      , _generate_pawn_jumps)
 time2 = time.time()
 msg = "Loaded globals in {:.2f} ms".format(1000*(time2-time1))
-print(msg)
+# print(msg)

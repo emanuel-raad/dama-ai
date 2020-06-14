@@ -1,20 +1,24 @@
+import multiprocessing
 import os
 import pickle
+import uuid
 from dataclasses import dataclass
 from enum import Enum
 from typing import List
 
 import numpy as np
+from joblib import Parallel, delayed
 from numba import jit, njit, uint64
 from treelib import Node, Tree
 
 from dama.game.attack import (blockerMasks, get_king_attack, kingMagicLookup,
-                    pawnDoubleMasks, pawnSingleMasks)
+                              pawnDoubleMasks, pawnSingleMasks)
 from dama.game.bitboard import *
 from dama.game.bitboard import Bitboard
 from dama.game.bitboard_constants import *
 from dama.game.bitOperations import *
 from dama.game.move import MoveNode, MoveTypes
+
 
 def decompose_directions(pos, board, mask):
     masks = mask[pos]
@@ -194,7 +198,7 @@ def evaluate(board, myPawn, myKing, oppBoard):
         
         # If any tree jumped, remove the ones that didn't
         if evaluator.hasEverJumped:
-            remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False])
+            remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False], reverse=True)
             for i in remove:
                 del moveTreeList[i]
 
@@ -207,55 +211,29 @@ def evaluate(board, myPawn, myKing, oppBoard):
     for movetree in moveTreeList:
         tree.paste(rootNode.identifier, movetree)
 
-    return tree
-
-def getValidBranch(tree):
-    # Prune the tree to keep the longest branches
-    
+    # More validation    
     def remove_nodes_list(t, remove):
         for nodeID in remove:
             if t.contains(nodeID):
                 t.remove_node(nodeID)
 
-    maxDepth = tree.depth()
-
-    nodesToRemove = []
-
-    containsJump = False
-
-    for leaf in tree.leaves():
-        for nodeID in tree.rsearch(leaf.identifier):
-            # print(tree.get_node(nodeID).tag)
-
-            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []) or (tree.depth(nodeID) == 1 and tree.children(nodeID) == []):
-                # print("\tPRUNE: {}".format(tree.get_node(nodeID).tag))
-                nodesToRemove.append(nodeID)
-
-            if maxDepth == 2 and tree.get_node(nodeID).data.moveType == MoveTypes.JUMP:
-                containsJump = True
-            # print()
-
-    remove_nodes_list(tree, nodesToRemove)
-
     # If depth is 2, then iterate thru the tree to see if there is a jump
     # If yes, then remove the quiet moves
-    nodesToRemove = []
-    if containsJump:
-        for leaf in tree.leaves():
-            for nodeID in tree.rsearch(leaf.identifier):
-                if tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
-                    nodesToRemove.append(nodeID)
-                    nodesToRemove.append(tree.parent(nodeID).identifier)
-    
-    remove_nodes_list(tree, nodesToRemove)
-
     # This is to remove the moves that used to have children, but now don't
     # Example: for the PawnJumps board.
     # There must be a better way to prune :/
     nodesToRemove = []
     for leaf in tree.leaves():
         for nodeID in tree.rsearch(leaf.identifier):
-            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []):
+            alreadyAppended = False
+
+            if evaluator.hasEverJumped and tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
+                if tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
+                    nodesToRemove.append(nodeID)
+                    nodesToRemove.append(tree.parent(nodeID).identifier)
+                    alreadyAppended = True
+
+            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []) and not alreadyAppended:
                 nodesToRemove.append(nodeID)
     
     remove_nodes_list(tree, nodesToRemove)
@@ -270,7 +248,7 @@ def listFromTree(tree):
     return moveList
 
 def get_all_legal_moves_list(currentBoard:Bitboard):
-    return listFromTree(getValidBranch(evaluate(currentBoard.board, currentBoard.myPawn, currentBoard.myKing, currentBoard.oppBoard)))
+    return listFromTree(evaluate(currentBoard.board, currentBoard.myPawn, currentBoard.myKing, currentBoard.oppBoard))
 
 @dataclass
 class MoveSearchNode:
@@ -278,9 +256,91 @@ class MoveSearchNode:
     moveList : List[MoveNode]
     activePlayer : bool
 
+def move_search_parallel2(currentBoard, depth):
+    assert depth >= 0 and depth <= 5
+    # Initialize the master tree by doing a 0-depth move search
+    tree = move_search(currentBoard, 0)
+    
+    if depth == 0:
+        return tree
+
+    # tree.show()
+     #print()
+
+    branchIDs = []
+    sub_boards = []
+
+    for node in tree.leaves():
+        branchIDs.append(node.identifier)
+        sub_boards.append(
+            flip_color(tree.get_node(node.identifier).data.bitboards)
+        )
+
+    n_cpus = multiprocessing.cpu_count()
+    # print("Running on {} cpus".format(n_cpus))
+
+    results = Parallel(n_jobs=n_cpus, backend="multiprocessing")(
+        delayed(move_search)(sub_boards[i], depth - 1) for i in range(0, len(sub_boards))
+    )
+
+    for i in range(0, len(branchIDs)):
+        tree.paste(branchIDs[i], results[i])
+        tree.link_past_node(results[i].root)
+
+    return tree
+
+
+def move_search_parallel(currentBoard, depth):
+    assert depth > 0
+
+    # Initialize the master tree
+    tree = Tree()
+    parentMoveSearchNode = MoveSearchNode(bitboards=currentBoard, moveList=[], activePlayer=True)
+    parentNode = Node(data=parentMoveSearchNode)
+    tree.add_node(parentNode)
+
+    # Generate the first set of moves. Each move will become it's own branch, that can
+    # be indenpendently analyzed by a process
+    moveList = get_all_legal_moves_list(currentBoard)
+    childBoardList = []
+    childNodeIDs = []
+
+    for move in moveList:
+        childBoard = perform_move_board(move, currentBoard)
+        childBoardList.append(childBoard)
+
+        childMoveSearchNode = MoveSearchNode(bitboards=childBoard, moveList=move, activePlayer=True)
+        childNode = Node(data=childMoveSearchNode)
+        tree.add_node(childNode, parent=parentNode)
+
+        childNodeIDs.append(childNode.identifier)
+    
+    print("Branching off into n childs: n={}".format(len(childBoardList)))
+
+    n_cpus = multiprocessing.cpu_count()
+    print("Running on {} cpus".format(n_cpus))
+
+    results = Parallel(n_jobs=n_cpus)(
+        delayed(move_search)(childBoardList[i], depth - 1) for i in range(0, len(childBoardList))
+    )
+
+    # for tree in results:
+    #     tree.show()
+
+    # # Finally combine them all in one big tree
+    # tree = Tree()
+    # rootMove = MoveNode(moveFrom=None, moveTo=None, moveType=MoveTypes.START)
+    # rootNode = Node(tag=rootMove.tag, data=rootMove)
+    # tree.add_node(rootNode)
+    
+    for i in range(0, len(results)):
+        tree.paste(childNodeIDs[i], results[i])
+    
+    return tree
+
 def move_search(
     currentBoard:Bitboard, depth, activePlayer = True, 
-    tree = None, parentNode = None
+    tree = None, parentNode = None, debug=False
     ):
 
     # Flip board between moves, but not for the first time
@@ -297,22 +357,24 @@ def move_search(
 
     for move in moveList:
         
-        # n_jumps = 0
-        # n_promotions = 0
-        # for m in move:
-        #     if m.moveType == MoveTypes.JUMP:
-        #         n_jumps += 1
-        #     if m.promotion:
-        #         n_promotions += 1
+        if debug:
+            n_jumps = 0
+            n_promotions = 0
+            for m in move:
+                if m.moveType == MoveTypes.JUMP:
+                    n_jumps += 1
+                if m.promotion:
+                    n_promotions += 1
 
         childBoard = perform_move_board(move, currentBoard)
 
-        # assert popCount(childBoard.board) == (popCount(currentBoard.board) - n_jumps)
-        # assert n_promotions == 1 or n_promotions == 0
-        # assert popCount(childBoard.myKing) == (popCount(currentBoard.myKing) + n_promotions)
+        if debug:
+            assert popCount(childBoard.board) == (popCount(currentBoard.board) - n_jumps)
+            assert n_promotions == 1 or n_promotions == 0
+            assert popCount(childBoard.myKing) == (popCount(currentBoard.myKing) + n_promotions)
 
         childState = MoveSearchNode(bitboards=childBoard, moveList=move, activePlayer=not activePlayer)
-        childNode = Node(data=childState)
+        childNode = Node(data=childState, identifier=uuid.uuid4().hex)
         tree.add_node(childNode, parent=parentNode)
 
         if depth is not 0:
@@ -332,12 +394,11 @@ def test_bitboard_contants():
         time1 = time.time()
         tree = evaluate(b.board, b.myPawn, b.myKing, b.oppBoard)
         time2 = time.time()
-        getValidBranch(tree)
-        time3 = time.time()
         moveList = listFromTree(tree)
+        time3 = time.time()
 
         print("Generated the tree in: {}us".format(1000000*(time2-time1)))
-        print("Validated the tree in: {}us".format(1000000*(time3-time2)))
+        print("Got moves in         : {}us".format(1000000*(time3-time2)))
         print()
 
         # tree.show()
@@ -352,7 +413,7 @@ def test_flipping_color(board):
     print()
 
     # white moves
-    white_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))
+    white_tree = evaluate(board.board, board.myPawn, board.myKing, board.oppBoard)
     white_moves = listFromTree(white_tree)
     board = perform_move_board(white_moves[0], board)
     print_bitboard([ board.board, board.myPawn, board.oppPawn ])
@@ -360,7 +421,7 @@ def test_flipping_color(board):
 
     # black moves
     board = flip_color(board)
-    black_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))
+    black_tree = evaluate(board.board, board.myPawn, board.myKing, board.oppBoard)
     black_moves = listFromTree(black_tree)
     board = perform_move_board(black_moves[0], board)
     print_bitboard([ board.board, board.myPawn, board.oppPawn ])
@@ -370,4 +431,4 @@ def test_flipping_color(board):
     board = flip_color(board)
     print_bitboard([ board.board, board.myPawn, board.oppPawn ])
     print()
-    white_tree = getValidBranch(evaluate(board.board, board.myPawn, board.myKing, board.oppBoard))
+    white_tree = evaluate(board.board, board.myPawn, board.myKing, board.oppBoard)

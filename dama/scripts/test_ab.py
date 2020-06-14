@@ -1,19 +1,32 @@
-from dama.game import dama
+import time
+
+import numpy as np
+
+from dama.agents.alphaBeta import AlphaBeta
 from dama.agents.human import Human
 from dama.agents.random import Random
-from dama.agents.alphaBeta import AlphaBeta
+from dama.game import dama
 from dama.game.constants import Color
-import time
-import numpy as np
 
 if __name__ == '__main__':
 
     print("Hello World!")
 
-    game = dama.DamaGame()
+    board = np.array([
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 3, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0],
+    ])
+
+    game = dama.DamaGame(board=board)
 
     game.gameboard.print_board()
-    player1 = AlphaBeta(Color.BLACK, movesAhead=2)
+    player1 = AlphaBeta(Color.BLACK, movesAhead=0)
 
     res = game.get_all_legal_moves(player1)
 
@@ -22,4 +35,4 @@ if __name__ == '__main__':
     print(choice)
     end_time = time.time()
 
-    print("Completed in {:.4f} seconds".format(end_time-start_time))
+    # print("Completed in {:.4f} seconds".format(end_time-start_time))
