@@ -256,16 +256,13 @@ class MoveSearchNode:
     moveList : List[MoveNode]
     activePlayer : bool
 
-def move_search_parallel2(currentBoard, depth):
+def move_search(currentBoard, depth, forceParallel=False):
     assert depth >= 0 and depth <= 5
     # Initialize the master tree by doing a 0-depth move search
-    tree = move_search(currentBoard, 0)
+    tree = move_search_single(currentBoard, 0)
     
     if depth == 0:
         return tree
-
-    # tree.show()
-     #print()
 
     branchIDs = []
     sub_boards = []
@@ -276,11 +273,14 @@ def move_search_parallel2(currentBoard, depth):
             flip_color(tree.get_node(node.identifier).data.bitboards)
         )
 
-    n_cpus = multiprocessing.cpu_count()
+    n_cpus = 1
+    if forceParallel or depth >= 4:
+        n_cpus = multiprocessing.cpu_count()
+
     # print("Running on {} cpus".format(n_cpus))
 
     results = Parallel(n_jobs=n_cpus, backend="multiprocessing")(
-        delayed(move_search)(sub_boards[i], depth - 1) for i in range(0, len(sub_boards))
+        delayed(move_search_single)(sub_boards[i], depth - 1) for i in range(0, len(sub_boards))
     )
 
     for i in range(0, len(branchIDs)):
@@ -289,56 +289,7 @@ def move_search_parallel2(currentBoard, depth):
 
     return tree
 
-
-def move_search_parallel(currentBoard, depth):
-    assert depth > 0
-
-    # Initialize the master tree
-    tree = Tree()
-    parentMoveSearchNode = MoveSearchNode(bitboards=currentBoard, moveList=[], activePlayer=True)
-    parentNode = Node(data=parentMoveSearchNode)
-    tree.add_node(parentNode)
-
-    # Generate the first set of moves. Each move will become it's own branch, that can
-    # be indenpendently analyzed by a process
-    moveList = get_all_legal_moves_list(currentBoard)
-    childBoardList = []
-    childNodeIDs = []
-
-    for move in moveList:
-        childBoard = perform_move_board(move, currentBoard)
-        childBoardList.append(childBoard)
-
-        childMoveSearchNode = MoveSearchNode(bitboards=childBoard, moveList=move, activePlayer=True)
-        childNode = Node(data=childMoveSearchNode)
-        tree.add_node(childNode, parent=parentNode)
-
-        childNodeIDs.append(childNode.identifier)
-    
-    print("Branching off into n childs: n={}".format(len(childBoardList)))
-
-    n_cpus = multiprocessing.cpu_count()
-    print("Running on {} cpus".format(n_cpus))
-
-    results = Parallel(n_jobs=n_cpus)(
-        delayed(move_search)(childBoardList[i], depth - 1) for i in range(0, len(childBoardList))
-    )
-
-    # for tree in results:
-    #     tree.show()
-
-    # # Finally combine them all in one big tree
-    # tree = Tree()
-    # rootMove = MoveNode(moveFrom=None, moveTo=None, moveType=MoveTypes.START)
-    # rootNode = Node(tag=rootMove.tag, data=rootMove)
-    # tree.add_node(rootNode)
-    
-    for i in range(0, len(results)):
-        tree.paste(childNodeIDs[i], results[i])
-    
-    return tree
-
-def move_search(
+def move_search_single(
     currentBoard:Bitboard, depth, activePlayer = True, 
     tree = None, parentNode = None, debug=False
     ):
@@ -378,7 +329,7 @@ def move_search(
         tree.add_node(childNode, parent=parentNode)
 
         if depth is not 0:
-            move_search(
+            move_search_single(
                 childBoard, depth - 1, activePlayer = not activePlayer,
                 tree = tree, parentNode = childNode
             )

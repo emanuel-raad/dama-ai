@@ -3,7 +3,7 @@ import time
 from treelib import Node, Tree
 
 from dama.game.bitboard import Bitboard, initialize_board, single, print_bitboard
-from dama.game.attack_routines import move_search, move_search_parallel, move_search_parallel2
+from dama.game.attack_routines import move_search
 
 if __name__ == '__main__':
 
@@ -16,7 +16,7 @@ if __name__ == '__main__':
     board = Bitboard(myPawn, myKing, oppPawn, oppKing)
 
     time1 = time.time()
-    tree = move_search_parallel2(board, 4)
+    tree = move_search(board, 0)
     time2 = time.time()
 
     size = tree.size()
@@ -24,6 +24,8 @@ if __name__ == '__main__':
     print("Generated {} states in : {:.4f}ms".format(size, totalTime))
     print("Tree depth             : {}".format(tree.depth()))
     print("Average time per move  : {:.4f}ms".format(totalTime/size))
+
+    tree.show()
 
     # regularTimes = []
     # parallelTimes = []

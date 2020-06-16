@@ -3,6 +3,7 @@ import numpy as np
 from dama.game.bitboard import array2bit, initialize_board, numpyboard2bitboard
 import numba as nb
 
+# TODO: remove this class and make everything use the Bitboard class
 class BoardParent:
     def __init__(self, npBoard, tag=''):
         self.tag = tag

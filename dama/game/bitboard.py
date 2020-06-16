@@ -182,6 +182,9 @@ class Bitboard():
         self.oppBoard = oppPawn | oppKing
         self.myBoard = myPawn | myKing
 
+def get_empty_board():
+    return Bitboard(np.uint64(0), np.uint64(0), np.uint64(0), np.uint64(0))
+
 def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
     myBoards = [myPawn, myKing]
     oppBoards = [oppPawn, oppKing]
