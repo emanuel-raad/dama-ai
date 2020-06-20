@@ -19,7 +19,6 @@ from dama.game.bitboard_constants import *
 from dama.game.bitOperations import *
 from dama.game.move import MoveNode, MoveTypes
 
-
 def decompose_directions(pos, board, mask):
     masks = mask[pos]
     decomposed_board = []
@@ -103,13 +102,13 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
                             [child], myPawn, myKing, oppBoard, 0
                         )
                         childOppBoard = childOppPawn
-                        childBoard = childMyPawn | childMyKing | childOppBoard
+                        childBoard = np.uint64(childMyPawn) | np.uint64(childMyKing) | np.uint64(childOppBoard)
 
-                        isPromoted, promotePos = check_promotions(childMyPawn)
+                        isPromoted = check_promotions(land)
                         if isPromoted:
                             # print("PROMOTED")
                             child.promotion = True
-                            childMyPawn, childMyKing = promote(promotePos, childMyPawn, childMyKing)
+                            childMyPawn, childMyKing = promote(land, childMyPawn, childMyKing)
                             # the board overall doesn't change so no need to update
 
                         childNode = Node(tag=child.tag, data=child)
@@ -128,7 +127,7 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
             slide = get_active_indices(attacks & ~board)
 
         for i in slide:
-            childMove = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=False)
+            childMove = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=check_promotions(i))
             childNode = Node(tag=childMove.tag, data=childMove)
             moveTree.add_node(childNode, parent=parentNode)
 
@@ -149,6 +148,20 @@ class Evaluator:
         self.depthTracker.append(depth)
     def trackJump(self, hasJumped):
         self.jumpTracker.append(hasJumped)
+
+# More validation    
+def remove_nodes_list(t, remove):
+    for nodeID in remove:
+        if t.contains(nodeID):
+            t.remove_node(nodeID)
+
+def remove_branch(t, nodeID):
+    for ancestor_id in list(t.rsearch(nodeID)):
+        n_child = len(t.children(ancestor_id))
+        contains = t.contains(ancestor_id)
+        # print("ID: {} From: {} N_child: {} Contains:{}".format( ancestor_id, t.get_node(ancestor_id).data.moveFrom, n_child, contains ))
+        if n_child == 0 and contains:
+            t.remove_node(ancestor_id)
 
 def evaluate(board, myPawn, myKing, oppBoard):
     evaluator = Evaluator()
@@ -187,20 +200,18 @@ def evaluate(board, myPawn, myKing, oppBoard):
         # Reset all the time between pieces
         evaluator.resetJump()
 
-    if len(evaluator.depthTracker) > 0:
-        m = max(evaluator.depthTracker)
-        remove = sorted([i for i, j in enumerate(evaluator.depthTracker) if j!=m], reverse=True)
+    remove = sorted([ i for i, j in enumerate(evaluator.depthTracker) if j<maxDepth ], reverse=True)
 
-        # For every short tree added before the longest one, delete the short ones
+    # For every short tree added before the longest one, delete the short ones
+    for i in remove:
+        del moveTreeList[i]
+        del evaluator.jumpTracker[i]
+    
+    # If any tree jumped, remove the ones that didn't
+    if evaluator.hasEverJumped:
+        remove = sorted([i for i, j in enumerate(evaluator.jumpTracker) if j==False], reverse=True)
         for i in remove:
             del moveTreeList[i]
-            del evaluator.jumpTracker[i]
-        
-        # If any tree jumped, remove the ones that didn't
-        if evaluator.hasEverJumped:
-            remove = sorted([i for i in enumerate(evaluator.jumpTracker) if i==False], reverse=True)
-            for i in remove:
-                del moveTreeList[i]
 
     # Finally combine them all in one big tree
     tree = Tree()
@@ -211,32 +222,41 @@ def evaluate(board, myPawn, myKing, oppBoard):
     for movetree in moveTreeList:
         tree.paste(rootNode.identifier, movetree)
 
-    # More validation    
-    def remove_nodes_list(t, remove):
-        for nodeID in remove:
-            if t.contains(nodeID):
-                t.remove_node(nodeID)
+
+    # Now we need to look at the depth within each tree
+    # and prune out the shorted ones
+    nodes_to_remove = []
+    maxDepth = tree.depth()
+
+    for node in tree.leaves():
+        if tree.depth(node) < maxDepth:
+            nodes_to_remove.append(node.identifier)
+        elif evaluator.hasEverJumped and node.data.moveType==MoveTypes.QUIET:
+            nodes_to_remove.append(node.identifier)
+
+    for nodeID in nodes_to_remove:
+        remove_branch(tree, nodeID)
 
     # If depth is 2, then iterate thru the tree to see if there is a jump
     # If yes, then remove the quiet moves
     # This is to remove the moves that used to have children, but now don't
     # Example: for the PawnJumps board.
     # There must be a better way to prune :/
-    nodesToRemove = []
-    for leaf in tree.leaves():
-        for nodeID in tree.rsearch(leaf.identifier):
-            alreadyAppended = False
+    # nodesToRemove = []
+    # for leaf in tree.leaves():
+    #     for nodeID in tree.rsearch(leaf.identifier):
+    #         alreadyAppended = False
 
-            if evaluator.hasEverJumped and tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
-                if tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
-                    nodesToRemove.append(nodeID)
-                    nodesToRemove.append(tree.parent(nodeID).identifier)
-                    alreadyAppended = True
+    #         if evaluator.hasEverJumped and tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
+    #             if tree.get_node(nodeID).data.moveType == MoveTypes.QUIET:
+    #                 nodesToRemove.append(nodeID)
+    #                 nodesToRemove.append(tree.parent(nodeID).identifier)
+    #                 alreadyAppended = True
 
-            if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []) and not alreadyAppended:
-                nodesToRemove.append(nodeID)
+    #         if ((tree.depth(nodeID) < maxDepth) and tree.children(nodeID) == []) and not alreadyAppended:
+    #             nodesToRemove.append(nodeID)
     
-    remove_nodes_list(tree, nodesToRemove)
+    # remove_nodes_list(tree, nodesToRemove)
 
     return tree
 
@@ -245,6 +265,10 @@ def listFromTree(tree):
     for i in range(0, len(moveList)):
         for j in range(0, len(moveList[i])):
             moveList[i][j] = tree.get_node(moveList[i][j]).data
+
+    lengths = [len(l) for l in moveList]
+    assert len( set( lengths ) ) == 1
+
     return moveList
 
 def get_all_legal_moves_list(currentBoard:Bitboard):
@@ -267,7 +291,7 @@ class MoveSearchNode:
     moveList : List[MoveNode]
     activePlayer : bool
 
-def move_search(currentBoard, depth, forceParallel=False):
+def move_search(currentBoard, depth, forceParallel=False, debug=False):
     assert depth >= 0 and depth <= 5
     # Initialize the master tree by doing a 0-depth move search
     tree = move_search_single(currentBoard, 0)
@@ -291,7 +315,7 @@ def move_search(currentBoard, depth, forceParallel=False):
     # print("Running on {} cpus".format(n_cpus))
 
     results = Parallel(n_jobs=n_cpus, backend="multiprocessing")(
-        delayed(move_search_single)(sub_boards[i], depth - 1) for i in range(0, len(sub_boards))
+        delayed(move_search_single)(sub_boards[i], depth - 1, debug=debug) for i in range(0, len(sub_boards))
     )
 
     for i in range(0, len(branchIDs)):
@@ -302,7 +326,7 @@ def move_search(currentBoard, depth, forceParallel=False):
 
 def move_search_single(
     currentBoard:Bitboard, depth, activePlayer = True, 
-    tree = None, parentNode = None, debug=True
+    tree = None, parentNode = None, debug=False
     ):
 
     # Flip board between moves, but not for the first time

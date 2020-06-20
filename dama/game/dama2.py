@@ -102,15 +102,13 @@ class DamaGame:
 
             # Draw ######################################################
             print('------------------------------------')
+            print("Turn: {}".format(self.currentPlayer.color))
             if self.activePlayer == self.startingPlayer:
                 self.renderer.drawBoard(self.bitboard)
             else:
                 self.renderer.drawBoard(flip_color(self.bitboard))
 
-            legalMoves = get_moves_from_tree(move_search(self.bitboard, 0, forceParallel=self.parallel))
-
-            lengths = [len(l) for l in legalMoves]
-            assert len( set( lengths ) ) == 1
+            legalMoves = get_moves_from_tree(move_search(self.bitboard, 0, forceParallel=self.parallel, debug=True))
 
             # check win state
             if self.check_win_state(self.bitboard, legalMoves):

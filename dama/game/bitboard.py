@@ -161,26 +161,22 @@ def promote(pos, myPawn, myKing):
 
     return myPawn, myKing
 
-def check_promotions(myPawn):
-    masked = np.uint64(myPawn) & rowMask[7]
+def check_promotions(pos):
+    masked = np.uint64(single(pos)) & rowMask[7]
     if masked != 0:
-        indices = get_active_indices(masked)
-        if len(indices) > 1 :
-            raise MultiplePawnPromote
-        else:
-            return True, indices[0]
+        return True
     else:
-        return False, 0
+        return False
 
 class Bitboard():
     def __init__(self, myPawn, myKing, oppPawn, oppKing):
-        self.myPawn = myPawn
-        self.myKing = myKing
-        self.oppPawn = oppPawn
-        self.oppKing = oppKing
-        self.board = myPawn | myKing | oppPawn | oppKing
-        self.oppBoard = oppPawn | oppKing
-        self.myBoard = myPawn | myKing
+        self.myPawn = np.uint64(myPawn)
+        self.myKing = np.uint64(myKing)
+        self.oppPawn = np.uint64(oppPawn)
+        self.oppKing = np.uint64(oppKing)
+        self.board = self.myPawn | self.myKing | self.oppPawn | self.oppKing
+        self.oppBoard = self.oppPawn | self.oppKing
+        self.myBoard = self.myPawn | self.myKing
 
 def get_empty_board():
     return Bitboard(np.uint64(0), np.uint64(0), np.uint64(0), np.uint64(0))
@@ -238,7 +234,7 @@ def numpyboard2bitboard(board):
             elif board[i][j] == 4:
                 oppKing = set_bit(idx, oppKing)
 
-    return np.uint64(myPawn), np.uint64(myKing), np.uint64(oppPawn), np.uint64(oppKing)
+    return Bitboard(np.uint64(myPawn), np.uint64(myKing), np.uint64(oppPawn), np.uint64(oppKing))
 
 def bitboard2numpyboard(board):
     npBoard = np.zeros(shape=(8, 8))

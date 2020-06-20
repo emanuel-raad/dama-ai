@@ -69,9 +69,7 @@ def fen2bitboard(fen:str):
         for j, col in enumerate(row):
             npBoard[i][j] = int(col)
 
-    myPawn, myKing, oppPawn, oppKing = numpyboard2bitboard(npBoard)
-
-    return Bitboard(myPawn, myKing, oppPawn, oppKing)
+    return numpyboard2bitboard(npBoard)
 
 def pos2fen(pos:int):
     row, col = get_row_col(pos)
