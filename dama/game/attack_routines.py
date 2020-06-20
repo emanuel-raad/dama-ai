@@ -250,6 +250,17 @@ def listFromTree(tree):
 def get_all_legal_moves_list(currentBoard:Bitboard):
     return listFromTree(evaluate(currentBoard.board, currentBoard.myPawn, currentBoard.myKing, currentBoard.oppBoard))
 
+def get_moves_from_tree(tree):
+    ''' Assumes move_search(board, depth=0)
+    '''
+    movelist = []
+    for node in tree.all_nodes_itr():
+        movelist.append(node.data.moveList)
+
+    movelist.pop(0)
+
+    return movelist
+
 @dataclass
 class MoveSearchNode:
     bitboards : Bitboard
@@ -291,7 +302,7 @@ def move_search(currentBoard, depth, forceParallel=False):
 
 def move_search_single(
     currentBoard:Bitboard, depth, activePlayer = True, 
-    tree = None, parentNode = None, debug=False
+    tree = None, parentNode = None, debug=True
     ):
 
     # Flip board between moves, but not for the first time

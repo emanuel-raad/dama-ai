@@ -11,7 +11,7 @@ class Player(ABC):
         self.type = 'AI'
 
     @abstractmethod
-    def request_move(self, board, moveList, removeList):
+    def request_move(self, board, moveList):
         pass
 
     def cleanup(self):

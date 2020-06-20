@@ -7,6 +7,10 @@ from dama.agents import helper
 from dama.agents.placeholder import getPlaceholder
 from dama.agents.player import Player
 
+from dama.game.attack_routines import move_search
+from dama.game.bitboard import countBoard
+
+from dama.game.fen import movelist2fen
 
 class AlphaBeta(Player):
 
@@ -18,81 +22,85 @@ class AlphaBeta(Player):
         # Towards the end, when there are less pieces, it is large
         self.movesAhead = movesAhead
 
-    def evaluate(self, board, color):
-        metrics = board.metrics(getPlaceholder(color))
+    def evaluate(self, board):
 
+        myPieces, myPromoted, oppPieces, oppPromoted = countBoard(board)
+
+        # Add value depending on the positioning of the piece
         score = (
-              2 * metrics['myPieces'] - 1 * metrics['opponentPieces']
-            + 4 * metrics['myPromoted'] - 5 * metrics['opponentPromoted']
+              1.5 * myPieces - 1 * oppPieces
+            + 4 * myPromoted - 5 * oppPromoted
         )
 
         return score
 
-    def alphaBeta(self, tree, node, depth, alpha, beta, maximizingPlayer):
+    def alphaBeta(self, tree, node, depth, alpha, beta, maximizingPlayer, bestValue, bestValueID=None):
         if depth == 0 or node.is_leaf():
             # always evaluate as if you are the player at the tree root
-            color = tree.get_node(tree.root).data.color
-            return self.evaluate(node.data.gameboard, color)
+            return self.evaluate(node.data.bitboards), None
 
         if maximizingPlayer:
             value = np.NINF
             for child_id in node.fpointer:
                 child_node = tree.get_node(child_id)
-                value = max(value, self.alphaBeta(tree, child_node, depth - 1, alpha, beta, False))
-                child_node.data.value = value
+                value = max(value, self.alphaBeta(tree, child_node, depth - 1, alpha, beta, False, bestValue, bestValueID)[0])
+                if value > bestValue:
+                    bestValue = value
+                    bestValueID = child_id
+
                 alpha = max(alpha, value)
                 if alpha >= beta:
                     break
-            return value
+            return value, bestValueID
 
         else:
             value = np.Inf
             for child_id in node.fpointer:
                 child_node = tree.get_node(child_id)
-                value = min(value, self.alphaBeta(tree, child_node, depth - 1, alpha, beta, True))
-                child_node.data.value = value
+                value = min(value, self.alphaBeta(tree, child_node, depth - 1, alpha, beta, True, bestValue, bestValueID)[0])
+                if value > bestValue:
+                    bestValue = value
+                    bestValueID = child_id
+                
                 beta = min(beta, value)
                 if alpha >= beta:
                     break
-            return value
+            return value, bestValueID
 
-    def request_move(self, board, moveList, removeList):
+    def request_move(self, board, legalMoves):
         
-        time1 = time.time()
-        tree = helper.getMoveTree(
-            board, moveList, removeList, self.color, self.movesAhead, moveCache=self.moveCache
-        )
-        time2 = time.time()
-        totalTime = 1000 * (time2 - time1)
-
-        print("Looked at {} possible boards in {}ms".format(tree.size(), totalTime))
-
-        # print
-        # (
-        #     'Final Score: {}'.format
-        #     (
-        #         self.alphaBeta(tree, tree.get_node(tree.root), self.movesAhead + 1, np.NINF, np.Inf, True)
-        #     )
-        # )
+        tree = move_search(board, self.movesAhead)
 
         # Run search
-        self.alphaBeta(tree, tree.get_node(tree.root), tree.depth(), np.NINF, np.Inf, True)
+        value, bestValueID = self.alphaBeta(tree, tree.get_node(tree.root), tree.depth(), np.NINF, np.Inf, True, np.NINF)
 
-        best_move = None
-        best_value = np.NINF
+        for i, moveNode in enumerate(tree.all_nodes_itr()):
+            if tree.is_ancestor(moveNode.identifier, bestValueID) \
+                and tree.root is not moveNode.identifier \
+                or moveNode.identifier == bestValueID:
+                
+                # print("I want to perform: {}".format(movelist2fen(moveNode.data.moveList)))
+                
+                # This works because the first depth that we generate here and the first depth
+                # of the legal moves will always be the same
+                # Subtract 1 to get rid of the index of the root node
+                
+                return i - 1
+            
+        # best_move = None
+        # best_value = np.NINF
 
-        for child_id in tree.get_node(tree.root).fpointer:
-            child_node = tree.get_node(child_id)
-            value = child_node.data.value
-            move = child_node.data.move
+        # for child_id in tree.get_node(tree.root).fpointer:
+        #     child_node = tree.get_node(child_id)
+        #     value = child_node.data.value
+        #     move = child_node.data.move
 
-            if value is not None and value > best_value:
-                best_value = value
-                best_move = move
+        #     if value is not None and value > best_value:
+        #         best_value = value
+        #         best_move = move
 
-        # tree.show(data_property="value")
-        # print(moveList)
-        # print(best_move)
-        choice = helper.getMoveFromMovelist(best_move, moveList)
+        # choice = helper.getMoveFromMovelist(best_move, moveList)
 
-        return choice
+        # return choice
+
+        # return bestValueID

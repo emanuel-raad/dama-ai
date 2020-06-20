@@ -4,10 +4,10 @@ import numpy as np
 from numba import njit
 
 from dama.game.move import MoveNode, MoveTypes
-from dama.game.bitboard import Bitboard, index, get_row_col, get_empty_board, numpyboard2bitboard, is_piece_present
+from dama.game.bitboard import Bitboard, index, get_row_col, get_empty_board, numpyboard2bitboard, is_piece_present, single, reverse64, get_active_indices
 
-rowStr = 'abcdefgh'
-colStr = '12345678'
+colStr = 'abcdefgh'
+rowStr = '12345678'
 
 def bitboard2fen(bitboard):
     # Reverse the string so that the index of the str is equal to the bitboard square
@@ -75,13 +75,37 @@ def fen2bitboard(fen:str):
 
 def pos2fen(pos:int):
     row, col = get_row_col(pos)
-    return rowStr[row] + colStr[row]
+    return colStr[col] + rowStr[row]
 
 def fen2pos(fen:str):
-    row = rowStr.find(fen[0])
-    col = colStr.find(fen[1])
+    row = rowStr.find(fen[1])
+    col = colStr.find(fen[0])
     return index(row, col)
 
+def flipFen(fen:str):
+    newFen = []
+    if len(fen) > 0:
+        for f in fen.split('-'):
+            pos = fen2pos(f)
+            posBinary = single(pos)
+            flipped = reverse64(posBinary)
+            newPos = get_active_indices(flipped)[0]
+            newFen.append(pos2fen(newPos))
+        
+        return '-'.join(newFen)
+    else:
+        return ''
+
 def movelist2fen(movelist:List[MoveNode]):
-    pass
-# return fen str
+    moveStr = ''
+    captureStr = ''
+
+    moveStrList = [pos2fen(move.moveTo) for move in movelist]
+    moveStrList.insert(0, pos2fen(movelist[0].moveFrom))
+
+    captureStrList = [pos2fen(move.capture) for move in movelist if move.capture is not None]
+
+    moveStr = '-'.join(moveStrList)
+    captureStr = '-'.join(captureStrList)
+
+    return moveStr, captureStr

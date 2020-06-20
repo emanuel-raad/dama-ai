@@ -7,7 +7,7 @@ import numpy as np
 from multipledispatch import dispatch
 from numba import int64, jit, njit, uint64
 
-from dama.game.bitOperations import clear_bit, set_bit, toggle_bit, reverse64
+from dama.game.bitOperations import clear_bit, set_bit, toggle_bit, reverse64, popCount
 from dama.game.move import MoveNode, MoveTypes
 
 u64high = 0xffffffffffffffff
@@ -185,6 +185,13 @@ class Bitboard():
 def get_empty_board():
     return Bitboard(np.uint64(0), np.uint64(0), np.uint64(0), np.uint64(0))
 
+def get_starting_board():
+    myPawn = initialize_board([1, 2])
+    myKing = 0
+    oppPawn = initialize_board([5, 6])
+    oppKing = 0
+    return Bitboard(myPawn, myKing, oppPawn, oppKing)
+
 def perform_move(moveList, myPawn, myKing, oppPawn, oppKing):
     myBoards = [myPawn, myKing]
     oppBoards = [oppPawn, oppKing]
@@ -232,3 +239,24 @@ def numpyboard2bitboard(board):
                 oppKing = set_bit(idx, oppKing)
 
     return np.uint64(myPawn), np.uint64(myKing), np.uint64(oppPawn), np.uint64(oppKing)
+
+def bitboard2numpyboard(board):
+    npBoard = np.zeros(shape=(8, 8))
+
+    for i in range(0, 8):
+        for j in range(0, 8):
+            idx = (7-i)*8 + j
+
+            if is_piece_present(idx, board.myPawn):
+                npBoard[i][j] = 1
+            elif is_piece_present(idx, board.myKing):
+                npBoard[i][j] = 2
+            elif is_piece_present(idx, board.oppPawn):
+                npBoard[i][j] = 3
+            elif is_piece_present(idx, board.oppKing):
+                npBoard[i][j] = 4
+
+    return npBoard
+
+def countBoard(board):
+    return popCount(board.myBoard), popCount(board.myKing),popCount(board.oppBoard), popCount(board.oppKing)
