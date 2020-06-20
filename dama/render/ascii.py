@@ -21,7 +21,7 @@ class Ascii(Renderer):
             print("{} {}".format(-1*i + 8, row))
         print("   a  b  c  d  e  f  g  h")
 
-    def animateMove(self, move:List[MoveNode]):
+    def animateMove(self, board, player, move:List[MoveNode]):
         ''' I could print some text here explaining the move,
             but otherwise nothing really else to animate
         '''

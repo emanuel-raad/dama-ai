@@ -70,6 +70,9 @@ class DamaGame:
         return False
 
     def start(self, startingPlayer = True):
+
+        self.renderer.setup()
+
         self.activePlayer = startingPlayer
 
         if not self.check_players():
@@ -95,8 +98,8 @@ class DamaGame:
                 self.bitboard = flip_color(self.bitboard)
 
             # Draw ######################################################
-            print('------------------------------------')
-            print("Turn: {}".format(self.currentPlayer.color))
+            # print('------------------------------------')
+            # print("Turn: {}".format(self.currentPlayer.color))
             if self.activePlayer == self.startingPlayer:
                 self.renderer.drawBoard(self.bitboard)
             else:
@@ -123,7 +126,7 @@ class DamaGame:
 
             # print('I will perform: {}'.format(movelist2fen(legalMoves[choice])))
             self.bitboard = perform_move_board(legalMoves[choice], self.bitboard)
-            self.renderer.animateMove(legalMoves[choice])
+            self.renderer.animateMove(self.bitboard, self.currentPlayer, legalMoves[choice])
             
             # Update
             self.activePlayer = not self.activePlayer

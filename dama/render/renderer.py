@@ -17,7 +17,7 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def animateMove(self, move:List[MoveNode]):
+    def animateMove(self, board, player, move:List[MoveNode]):
         pass
 
     @abstractmethod

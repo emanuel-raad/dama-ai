@@ -8,5 +8,5 @@ class Pieces(IntEnum):
     BLACK_PROMOTED = 4
 
 class Color(Enum):
-    WHITE = 1
-    BLACK = 2
+    WHITE = 'white'
+    BLACK = 'black'

@@ -20,21 +20,20 @@ if __name__ == '__main__':
     #     [0, 0, 0, 0, 0, 0, 0, 0,],
     # ]))
 
+    # game = DamaGame(bitboard=b)
+    game = DamaGame()
 
-    while True:
+    # player1 = Human(Color.WHITE)
+    # player2 = Human(Color.BLACK)
 
-        # game = DamaGame(bitboard=b)
-        game = DamaGame()
+    # player2 = AlphaBeta(Color.BLACK, movesAhead=2)
 
-        # player1 = Human(Color.WHITE)
-        # player2 = Human(Color.BLACK)
+    player1 = Random(Color.WHITE)
+    player2 = Random(Color.BLACK)
 
-        # player2 = AlphaBeta(Color.BLACK, movesAhead=2)
+    print(player1.color.value)
 
-        player1 = Random(Color.WHITE)
-        player2 = Random(Color.BLACK)
+    game.setPlayer(player1)
+    game.setPlayer(player2)
 
-        game.setPlayer(player1)
-        game.setPlayer(player2)
-
-        game.start()
+    # game.start()
