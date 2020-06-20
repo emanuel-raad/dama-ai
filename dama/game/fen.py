@@ -3,8 +3,10 @@ from typing import List
 import numpy as np
 from numba import njit
 
+from dama.game.bitboard import (Bitboard, get_active_indices, get_empty_board,
+                                get_row_col, index, is_piece_present,
+                                numpyboard2bitboard, reverse64, single)
 from dama.game.move import MoveNode, MoveTypes
-from dama.game.bitboard import Bitboard, index, get_row_col, get_empty_board, numpyboard2bitboard, is_piece_present, single, reverse64, get_active_indices
 
 colStr = 'abcdefgh'
 rowStr = '12345678'

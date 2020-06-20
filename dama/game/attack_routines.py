@@ -124,9 +124,10 @@ def get_all_generalized_moves(pos, board, myPawn, myKing, oppBoard, canMove = Tr
         if isPawn:
             slide = get_active_indices(pawnSingleMasks[pos] & ~board)
         elif isKing:
-            slide = get_active_indices(attacks & ~board)
+            slide = get_active_indices(firstAttackQuery & ~board)
 
         for i in slide:
+            promoted = check_promotions(i) if isPawn else False
             childMove = MoveNode(moveFrom=pos, moveTo=i, capture=None, moveType=MoveTypes.QUIET, promotion=check_promotions(i))
             childNode = Node(tag=childMove.tag, data=childMove)
             moveTree.add_node(childNode, parent=parentNode)

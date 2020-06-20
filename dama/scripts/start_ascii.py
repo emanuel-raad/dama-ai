@@ -1,38 +1,40 @@
-from dama.game.dama2 import DamaGame
-from dama.agents.human import Human
-from dama.agents.alphaBeta import AlphaBeta
-from dama.agents.random import Random
-from dama.game.constants import Color
-from dama.game.bitboard import numpyboard2bitboard
 import numpy as np
+
+from dama.agents.alphaBeta import AlphaBeta
+from dama.agents.human import Human
+from dama.agents.random import Random
+from dama.game.bitboard import numpyboard2bitboard
+from dama.game.constants import Color
+from dama.game.dama2 import DamaGame
 
 if __name__ == '__main__':
 
-    b = numpyboard2bitboard(np.array([
-        [0, 2, 0, 0, 0, 0, 0, 0,],
-        [0, 0, 0, 0, 0, 0, 0, 0,],
-        [0, 0, 0, 0, 0, 0, 0, 0,],
-        [0, 0, 0, 3, 0, 0, 0, 0,],
-        [0, 0, 0, 3, 0, 0, 0, 0,],
-        [0, 0, 0, 3, 0, 0, 0, 0,],
-        [0, 0, 0, 0, 0, 0, 0, 0,],
-        [0, 0, 0, 0, 0, 0, 0, 0,],
-    ]))
+    # b = numpyboard2bitboard(np.array([
+    #     [0, 0, 0, 0, 0, 0, 0, 0,],
+    #     [1, 1, 2, 0, 0, 0, 0, 0,],
+    #     [0, 0, 0, 0, 0, 0, 0, 0,],
+    #     [0, 0, 0, 3, 0, 0, 0, 0,],
+    #     [0, 0, 0, 3, 0, 0, 0, 0,],
+    #     [0, 0, 0, 3, 0, 0, 0, 0,],
+    #     [0, 0, 0, 0, 0, 0, 0, 0,],
+    #     [0, 0, 0, 0, 0, 0, 0, 0,],
+    # ]))
 
 
-    game = DamaGame(bitboard=b)
+    while True:
 
-    player1 = Human(Color.WHITE)
-    # player2 = Human(Color.BLACK)
+        # game = DamaGame(bitboard=b)
+        game = DamaGame()
 
-    # player2 = AlphaBeta(Color.BLACK, movesAhead=2)
+        # player1 = Human(Color.WHITE)
+        # player2 = Human(Color.BLACK)
 
-    # player1 = Random(Color.WHITE)
-    player2 = Random(Color.BLACK)
+        # player2 = AlphaBeta(Color.BLACK, movesAhead=2)
 
-    # TODO : no moves are being found for the sliding king
+        player1 = Random(Color.WHITE)
+        player2 = Random(Color.BLACK)
 
-    game.setPlayer(player1)
-    game.setPlayer(player2)
+        game.setPlayer(player1)
+        game.setPlayer(player2)
 
-    game.start()
+        game.start()

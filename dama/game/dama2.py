@@ -1,17 +1,19 @@
-import numpy as np
+import logging
 import os
+import time
+
+import numpy as np
 
 from dama.agents.player import Player
+from dama.game.attack_routines import get_moves_from_tree, move_search
+from dama.game.bitboard import (Bitboard, countBoard, flip_color,
+                                get_starting_board, initialize_board,
+                                perform_move_board, print_bitboard)
 from dama.game.constants import Color
-
-from dama.game.bitboard import Bitboard, initialize_board, print_bitboard, flip_color, get_starting_board, perform_move_board, countBoard
-from dama.game.attack_routines import move_search, get_moves_from_tree
-from dama.render.renderer import Renderer
-from dama.render.ascii import Ascii
 from dama.game.fen import movelist2fen
+from dama.render.ascii import Ascii
+from dama.render.renderer import Renderer
 
-import time
-import logging
 
 class DamaGame:
     def __init__(self, renderer=Ascii(), bitboard=None, parallel=True):
@@ -67,12 +69,6 @@ class DamaGame:
 
         return False
 
-    def get_other_player(self, player):
-        if player == self.white_player:
-            return self.black_player
-        else:
-            return self.white_player
-
     def start(self, startingPlayer = True):
         self.activePlayer = startingPlayer
 
@@ -81,8 +77,6 @@ class DamaGame:
 
         self.running = True
         
-        counter = 0
-
         while self.running:
 
             # Process ######################################################

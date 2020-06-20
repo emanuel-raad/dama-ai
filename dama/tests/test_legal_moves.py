@@ -84,6 +84,18 @@ if __name__ == '__main__':
             [1, 1, 1, 1, 0, 1, 1, 1,],
             [0, 0, 0, 0, 0, 0, 0, 0,],
         ]),
+
+        np.array([
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 3, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 0, 0, 0, 0, 0, 0, 0,],
+            [0, 2, 0, 0, 1, 1, 0, 0,],
+        ])
+
     ]
 
     render = Ascii()
@@ -92,9 +104,9 @@ if __name__ == '__main__':
 
     for i, b in enumerate(bitboards):
         render.drawBoard(b)
-        moves = get_moves_from_tree(move_search(b, 0))
-        # moves = get_all_legal_moves_list(b)
+        # moves = get_moves_from_tree(move_search(b, 0))
+        moves = get_all_legal_moves_list(b)
         for m in moves:
-            print(movelist2fen(m)[0])
-            pass
+            if len(m) > 0:
+                print(movelist2fen(m)[0])
         print()
