@@ -28,8 +28,8 @@ class AlphaBeta(Player):
 
         # Add value depending on the positioning of the piece
         score = (
-              1.5 * myPieces - 1 * oppPieces
-            + 4 * myPromoted - 5 * oppPromoted
+              1 * myPieces - 0.8 * oppPieces
+            + 3 * myPromoted - 5 * oppPromoted
         )
 
         return score
