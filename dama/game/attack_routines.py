@@ -7,10 +7,6 @@ from enum import Enum
 from typing import List
 
 import numpy as np
-from joblib import Parallel, delayed
-from numba import jit, njit, uint64
-from treelib import Node, Tree
-
 from dama.game.attack import (blockerMasks, get_king_attack, kingMagicLookup,
                               pawnDoubleMasks, pawnSingleMasks)
 from dama.game.bitboard import *
@@ -18,6 +14,9 @@ from dama.game.bitboard import Bitboard
 from dama.game.bitboard_constants import *
 from dama.game.bitOperations import *
 from dama.game.move import MoveNode, MoveTypes
+from joblib import Parallel, delayed
+from numba import jit, njit, uint64
+from treelib import Node, Tree
 
 def decompose_directions(pos, board, mask):
     masks = mask[pos]

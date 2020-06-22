@@ -5,8 +5,7 @@ from dama.game.fen import movelist2fen
 from dama.render.ascii import Ascii
 
 if __name__ == '__main__':
-
-
+    
     numpy_boards = [
         np.array([
             [0, 0, 0, 0, 0, 0, 0, 0,],

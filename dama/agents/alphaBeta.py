@@ -3,8 +3,6 @@ import time
 import numpy as np
 from treelib import Node, Tree
 
-from dama.agents import helper
-from dama.agents.placeholder import getPlaceholder
 from dama.agents.player import Player
 
 from dama.game.attack_routines import move_search
@@ -14,8 +12,8 @@ from dama.game.fen import movelist2fen
 
 class AlphaBeta(Player):
 
-    def __init__(self, color, moveCache=None, movesAhead = 2):
-        super().__init__(color, moveCache=moveCache)
+    def __init__(self, color, movesAhead = 2):
+        super().__init__(color)
 
         # Maybe make moves ahead more dynamic
         # At the beginning of the game, it is small
@@ -86,21 +84,3 @@ class AlphaBeta(Player):
                 # Subtract 1 to get rid of the index of the root node
                 
                 return i - 1
-            
-        # best_move = None
-        # best_value = np.NINF
-
-        # for child_id in tree.get_node(tree.root).fpointer:
-        #     child_node = tree.get_node(child_id)
-        #     value = child_node.data.value
-        #     move = child_node.data.move
-
-        #     if value is not None and value > best_value:
-        #         best_value = value
-        #         best_move = move
-
-        # choice = helper.getMoveFromMovelist(best_move, moveList)
-
-        # return choice
-
-        # return bestValueID

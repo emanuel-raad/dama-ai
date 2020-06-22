@@ -4,11 +4,11 @@ from random import randint
 
 import numba as nb
 import numpy as np
+from dama.game.bitOperations import (clear_bit, popCount, reverse64, set_bit,
+                                     toggle_bit)
+from dama.game.move import MoveNode, MoveTypes
 from multipledispatch import dispatch
 from numba import int64, jit, njit, uint64
-
-from dama.game.bitOperations import clear_bit, set_bit, toggle_bit, reverse64, popCount
-from dama.game.move import MoveNode, MoveTypes
 
 u64high = 0xffffffffffffffff
 

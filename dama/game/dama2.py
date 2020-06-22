@@ -3,7 +3,6 @@ import os
 import time
 
 import numpy as np
-
 from dama.agents.player import Player
 from dama.game.attack_routines import get_moves_from_tree, move_search
 from dama.game.bitboard import (Bitboard, countBoard, flip_color,
@@ -13,7 +12,6 @@ from dama.game.constants import Color
 from dama.game.fen import movelist2fen
 from dama.render.ascii import Ascii
 from dama.render.renderer import Renderer
-
 
 class DamaGame:
     def __init__(self, renderer=Ascii(), bitboard=None, parallel=True):
